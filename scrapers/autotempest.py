@@ -19,8 +19,15 @@ def _build_url(make: str, model: str, zip_code: str, radius: int) -> str:
 def _parse_listing_element(el, make: str, model: str) -> CarListing | None:
     """Parse a single AutoTempest result element."""
     try:
-        # Title
-        title_el = el.find_element("css selector", ".title, .listing-title, h2, h3")
+        # Title -- prefer .listing-title, fall back to h2 a, then h2/h3
+        title_el = None
+        for selector in [".listing-title", "h2 a", "h2", "h3", ".title"]:
+            try:
+                title_el = el.find_element("css selector", selector)
+                if title_el and title_el.text.strip():
+                    break
+            except Exception:
+                continue
         title = title_el.text.strip() if title_el else ""
         if not title:
             return None
@@ -36,30 +43,40 @@ def _parse_listing_element(el, make: str, model: str) -> CarListing | None:
         car_make = normalize_make(parts[1]) if len(parts) > 1 else normalize_make(make)
         car_model = parts[2] if len(parts) > 2 else model
 
-        # Price
-        try:
-            price_el = el.find_element("css selector", ".price, .listing-price")
-            price = parse_price(price_el.text)
-        except Exception:
-            price = None
+        # Price -- prefer .price, fall back to .listing-price
+        price = None
+        for selector in [".price", ".listing-price"]:
+            try:
+                price_el = el.find_element("css selector", selector)
+                price = parse_price(price_el.text)
+                if price is not None:
+                    break
+            except Exception:
+                continue
         if price is None:
             return None
 
         # Mileage
         mileage = None
-        try:
-            mileage_el = el.find_element("css selector", ".mileage, .listing-mileage")
-            mileage = parse_mileage(mileage_el.text)
-        except Exception:
-            pass
+        for selector in [".mileage", ".listing-mileage"]:
+            try:
+                mileage_el = el.find_element("css selector", selector)
+                mileage = parse_mileage(mileage_el.text)
+                if mileage is not None:
+                    break
+            except Exception:
+                continue
 
-        # Dealer
+        # Dealer/source
         dealer_name = None
-        try:
-            dealer_el = el.find_element("css selector", ".dealer, .source-name")
-            dealer_name = dealer_el.text.strip()
-        except Exception:
-            pass
+        for selector in [".source", ".dealer", ".source-name"]:
+            try:
+                dealer_el = el.find_element("css selector", selector)
+                dealer_name = dealer_el.text.strip()
+                if dealer_name:
+                    break
+            except Exception:
+                continue
 
         # Link
         url = ""
@@ -118,6 +135,7 @@ def scrape_autotempest(
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
+        from selenium.common.exceptions import TimeoutException
     except ImportError:
         logger.warning("AutoTempest: selenium not installed. pip install selenium")
         return []
@@ -139,6 +157,9 @@ def scrape_autotempest(
         logger.warning("AutoTempest: Chrome/chromedriver not available: %s", e)
         return []
 
+    # Selectors to try for result containers, in priority order
+    CONTAINER_SELECTORS = ".result-wrap, .result-row, .listing-row, .vehicle-card, [class*='result-item']"
+
     all_listings: list[CarListing] = []
 
     try:
@@ -153,18 +174,34 @@ def scrape_autotempest(
                 try:
                     driver.get(url)
                     # Wait for results to load
-                    WebDriverWait(driver, 15).until(
-                        EC.presence_of_element_located(
-                            (By.CSS_SELECTOR, ".result-row, .listing-row, .vehicle-card, [class*='result']")
+                    try:
+                        WebDriverWait(driver, 15).until(
+                            EC.presence_of_element_located(
+                                (By.CSS_SELECTOR, CONTAINER_SELECTORS)
+                            )
                         )
-                    )
+                    except TimeoutException:
+                        logger.warning(
+                            "AutoTempest: no results found for %s %s "
+                            "-- CSS selectors may need updating",
+                            make, model,
+                        )
+                        continue
+
                     polite_delay(2.0, 3.0)
 
                     # Find all listing elements
                     result_elements = driver.find_elements(
-                        By.CSS_SELECTOR,
-                        ".result-row, .listing-row, .vehicle-card, [class*='result-item']"
+                        By.CSS_SELECTOR, CONTAINER_SELECTORS,
                     )
+
+                    if not result_elements:
+                        logger.warning(
+                            "AutoTempest: no results found for %s %s "
+                            "-- CSS selectors may need updating",
+                            make, model,
+                        )
+                        continue
 
                     count = 0
                     for el in result_elements:
@@ -175,6 +212,12 @@ def scrape_autotempest(
 
                     logger.info("  %s %s: %d listings", make, model, count)
 
+                except TimeoutException:
+                    logger.warning(
+                        "AutoTempest: no results found for %s %s "
+                        "-- CSS selectors may need updating",
+                        make, model,
+                    )
                 except Exception as e:
                     logger.warning("AutoTempest: failed for %s %s: %s", make, model, e)
 

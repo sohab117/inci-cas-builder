@@ -12,7 +12,7 @@ from scrapers import scrape_all
 from dedup import make_dedup_key, deduplicate
 from storage import CarDatabase
 from car_info import (
-    _get_fuel_economy, _get_safety_ratings, _get_recalls, _get_complaints, _star_rating,
+    get_fuel_economy, get_safety_ratings, get_recalls, get_complaints, star_rating,
 )
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
@@ -135,16 +135,16 @@ def info():
         make = request.form["make"].strip().title()
         model = request.form["model"].strip().title()
 
-        specs = _get_fuel_economy(year, make, model)
-        safety = _get_safety_ratings(year, make, model)
-        recalls = _get_recalls(year, make, model)
-        complaints = _get_complaints(year, make, model)
+        specs = get_fuel_economy(year, make, model)
+        safety = get_safety_ratings(year, make, model)
+        recalls = get_recalls(year, make, model)
+        complaints = get_complaints(year, make, model)
 
     return render_template(
         "info.html",
         year=year, make=make, model=model,
         specs=specs, safety=safety, recalls=recalls, complaints=complaints,
-        star_rating=_star_rating,
+        star_rating=star_rating,
     )
 
 

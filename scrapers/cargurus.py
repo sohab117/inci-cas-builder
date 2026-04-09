@@ -1,3 +1,7 @@
+# NOTE: CarGurus does not have an official public API. This uses a semi-public
+# endpoint that may change without notice. If scraping returns 0 results,
+# the endpoint or response format may have changed.
+
 import logging
 import requests
 
@@ -46,17 +50,21 @@ def _resolve_make_ids() -> dict[str, str]:
     return KNOWN_MAKE_IDS
 
 
-def _fetch_listings_for_make(entity_id: str, zip_code: str, radius: int) -> list[dict]:
+def _fetch_listings_for_make(entity_id: str, zip_code: str, radius: int,
+                             max_price: int | None = None) -> list[dict]:
     """Fetch raw listing data for a single make entity from CarGurus."""
     try:
+        params = {
+            "searchType": "USED",
+            "entityId": entity_id,
+            "postalCode": zip_code,
+            "distance": radius,
+        }
+        if max_price is not None:
+            params["maxPrice"] = max_price
         resp = requests.get(
             f"{CARGURUS_API_BASE}/listingSearch.action",
-            params={
-                "searchType": "USED",
-                "entityId": entity_id,
-                "postalCode": zip_code,
-                "distance": radius,
-            },
+            params=params,
             headers=DEFAULT_HEADERS,
             timeout=30,
         )
@@ -158,7 +166,7 @@ def scrape_cargurus(
             continue
 
         logger.info("CarGurus: fetching %s (entity=%s)...", make_upper, entity_id)
-        raw_listings = _fetch_listings_for_make(entity_id, zip_code, radius)
+        raw_listings = _fetch_listings_for_make(entity_id, zip_code, radius, max_price)
         polite_delay(1.0, 2.0)
 
         wanted_models = target_models.get(make_upper, set())

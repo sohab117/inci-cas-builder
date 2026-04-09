@@ -16,7 +16,7 @@ COMPLAINTS_URL = "https://api.nhtsa.gov/complaints/complaintsByVehicle"
 TIMEOUT = 15
 
 
-def _star_rating(rating) -> str:
+def star_rating(rating) -> str:
     """Convert a numeric rating to stars."""
     if rating is None or rating == "Not Rated":
         return "Not Rated"
@@ -27,7 +27,7 @@ def _star_rating(rating) -> str:
         return str(rating)
 
 
-def _get_fuel_economy(year: int, make: str, model: str) -> dict | None:
+def get_fuel_economy(year: int, make: str, model: str) -> dict | None:
     """Fetch MPG and engine specs from FuelEconomy.gov."""
     try:
         # Step 1: Get vehicle options/IDs
@@ -72,7 +72,7 @@ def _get_fuel_economy(year: int, make: str, model: str) -> dict | None:
         return None
 
 
-def _get_safety_ratings(year: int, make: str, model: str) -> dict | None:
+def get_safety_ratings(year: int, make: str, model: str) -> dict | None:
     """Fetch NHTSA 5-star safety ratings."""
     try:
         resp = requests.get(
@@ -112,7 +112,7 @@ def _get_safety_ratings(year: int, make: str, model: str) -> dict | None:
         return None
 
 
-def _get_recalls(year: int, make: str, model: str) -> list[dict]:
+def get_recalls(year: int, make: str, model: str) -> list[dict]:
     """Fetch recalls from NHTSA."""
     try:
         resp = requests.get(
@@ -136,7 +136,7 @@ def _get_recalls(year: int, make: str, model: str) -> list[dict]:
         return []
 
 
-def _get_complaints(year: int, make: str, model: str) -> dict:
+def get_complaints(year: int, make: str, model: str) -> dict:
     """Fetch consumer complaints from NHTSA and summarize by component."""
     try:
         resp = requests.get(
@@ -172,7 +172,7 @@ def lookup_car_info(year: int, make: str, model: str):
 
     # Specs
     print("  Fetching specs...")
-    specs = _get_fuel_economy(year, make_title, model_title)
+    specs = get_fuel_economy(year, make_title, model_title)
     if specs:
         print(f"\n  Engine:     {specs['engine']}")
         print(f"  MPG:        {specs['mpg_city']} city / {specs['mpg_highway']} hwy / {specs['mpg_combined']} combined")
@@ -187,18 +187,18 @@ def lookup_car_info(year: int, make: str, model: str):
 
     # Safety
     print("\n  Fetching safety ratings...")
-    safety = _get_safety_ratings(year, make_title, model_title)
+    safety = get_safety_ratings(year, make_title, model_title)
     if safety:
-        print(f"\n  Safety Rating: {_star_rating(safety['overall'])} ({safety['overall']}/5 Overall)")
-        print(f"    Frontal:  {_star_rating(safety['frontal'])}")
-        print(f"    Side:     {_star_rating(safety['side'])}")
-        print(f"    Rollover: {_star_rating(safety['rollover'])}")
+        print(f"\n  Safety Rating: {star_rating(safety['overall'])} ({safety['overall']}/5 Overall)")
+        print(f"    Frontal:  {star_rating(safety['frontal'])}")
+        print(f"    Side:     {star_rating(safety['side'])}")
+        print(f"    Rollover: {star_rating(safety['rollover'])}")
     else:
         print("\n  Safety ratings: not available for this vehicle")
 
     # Recalls
     print("\n  Fetching recalls...")
-    recalls = _get_recalls(year, make_title, model_title)
+    recalls = get_recalls(year, make_title, model_title)
     if recalls:
         print(f"\n  Recalls: {len(recalls)} found")
         for r in recalls[:10]:
@@ -209,7 +209,7 @@ def lookup_car_info(year: int, make: str, model: str):
 
     # Complaints
     print("\n  Fetching complaints...")
-    complaints = _get_complaints(year, make_title, model_title)
+    complaints = get_complaints(year, make_title, model_title)
     if complaints["total"] > 0:
         top = " | ".join(f"{comp}: {cnt}" for comp, cnt in complaints["by_component"][:5])
         print(f"\n  Complaints: {complaints['total']} total")

@@ -92,7 +92,20 @@
 
 {% if scrape_status.running %}
 <script>
-    setTimeout(function() { window.location.reload(); }, 5000);
+    (function poll() {
+        fetch('/api/status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.running) {
+                    window.location.reload();
+                } else {
+                    setTimeout(poll, 3000);
+                }
+            })
+            .catch(function() {
+                setTimeout(poll, 3000);
+            });
+    })();
 </script>
 {% endif %}
 
