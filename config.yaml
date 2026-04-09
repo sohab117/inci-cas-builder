@@ -1,0 +1,24 @@
+search:
+  zip: "60515"
+  radius: 40
+  max_price: 20000
+  stock_type: used
+
+vehicles:
+  - make: BMW
+    models:
+      - "3 Series"
+      - "5 Series"
+  - make: Audi
+    models:
+      - "A4"
+      - "A6"
+  - make: Infiniti
+    models:
+      - "Q50"
+      - "Q60"
+
+sources:
+  - cars_com
+  - cargurus
+  - autotempest
