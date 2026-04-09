@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block subtitle %}Price Drops{% endblock %}
+
+{% block content %}
+
+<div class="section-title">Price Drops</div>
+
+{% if drops %}
+    {% for d in drops %}
+    <div class="card">
+        <a href="/listing/{{ d.id }}">
+            <div style="display:flex; justify-content:space-between; align-items:start">
+                <div class="card-title">{{ d.year }} {{ d.make }} {{ d.model }}</div>
+                <span class="badge badge-drop">-{{ d.price_drop | currency }}</span>
+            </div>
+            <div style="display:flex; gap:12px; align-items:baseline; margin-top:4px">
+                <span style="color:#71717a; font-size:14px; text-decoration:line-through">{{ d.first_price | currency }}</span>
+                <span class="card-price">{{ d.latest_price | currency }}</span>
+            </div>
+            <div class="card-meta">
+                <span>{{ d.mileage | mileage }}</span>
+                <span class="badge badge-source">{{ d.source }}</span>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty">
+        <h3>No price drops yet</h3>
+        <p>Run scrapes over multiple days to detect price changes</p>
+    </div>
+{% endif %}
+
+{% endblock %}

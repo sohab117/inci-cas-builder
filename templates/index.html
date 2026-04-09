@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block subtitle %}{{ search.zip }} &bull; {{ search.radius }}mi &bull; Under {{ search.max_price | currency }}{% endblock %}
+
+{% block content %}
+
+<!-- Scrape Actions -->
+<div class="scrape-actions">
+    <form method="POST" action="/scrape" style="display:inline">
+        <button type="submit" class="btn btn-primary" {% if scrape_status.running %}disabled{% endif %}>
+            {% if scrape_status.running %}Scraping...{% else %}Scrape All{% endif %}
+        </button>
+    </form>
+    <form method="POST" action="/scrape" style="display:inline">
+        <input type="hidden" name="source" value="cars_com">
+        <button type="submit" class="btn btn-sm btn-outline" {% if scrape_status.running %}disabled{% endif %}>Cars.com</button>
+    </form>
+    <form method="POST" action="/scrape" style="display:inline">
+        <input type="hidden" name="source" value="cargurus">
+        <button type="submit" class="btn btn-sm btn-outline" {% if scrape_status.running %}disabled{% endif %}>CarGurus</button>
+    </form>
+</div>
+
+{% if scrape_status.message %}
+<div class="status-banner {% if 'Error' in scrape_status.message %}error{% endif %}">
+    {{ scrape_status.message }}
+</div>
+{% endif %}
+
+<!-- Stats -->
+{% if summary.total > 0 %}
+<div class="stats">
+    <div class="stat-card">
+        <div class="number">{{ summary.total }}</div>
+        <div class="label">Total</div>
+    </div>
+    {% for row in summary.by_make %}
+    <div class="stat-card">
+        <div class="number">{{ row.c }}</div>
+        <div class="label">{{ row.make }}</div>
+    </div>
+    {% endfor %}
+    {% if drops %}
+    <div class="stat-card">
+        <div class="number" style="color:#ef4444">{{ drops | length }}</div>
+        <div class="label">Drops</div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Filters -->
+{% if makes %}
+<div class="filters">
+    <a href="/?sort={{ current_sort }}" class="btn btn-sm {% if not current_make %}btn-primary{% else %}btn-outline{% endif %}">All</a>
+    {% for make in makes %}
+    <a href="/?make={{ make }}&sort={{ current_sort }}" class="btn btn-sm {% if current_make == make %}btn-primary{% else %}btn-outline{% endif %}">{{ make }}</a>
+    {% endfor %}
+</div>
+<div class="filters">
+    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=price" class="btn btn-sm {% if current_sort == 'price' %}btn-primary{% else %}btn-outline{% endif %}">Price</a>
+    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=year" class="btn btn-sm {% if current_sort == 'year' %}btn-primary{% else %}btn-outline{% endif %}">Year</a>
+    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=mileage" class="btn btn-sm {% if current_sort == 'mileage' %}btn-primary{% else %}btn-outline{% endif %}">Mileage</a>
+    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=newest" class="btn btn-sm {% if current_sort == 'newest' %}btn-primary{% else %}btn-outline{% endif %}">Newest</a>
+</div>
+{% endif %}
+
+<!-- Listings -->
+{% if listings %}
+    {% for l in listings %}
+    <div class="card">
+        <a href="/listing/{{ l.id }}">
+            <div style="display:flex; justify-content:space-between; align-items:start">
+                <div class="card-title">{{ l.year }} {{ l.make }} {{ l.model }}</div>
+                <span class="badge badge-source">{{ l.source }}</span>
+            </div>
+            <div class="card-price">{{ l.price | currency }}</div>
+            <div class="card-meta">
+                <span>{{ l.mileage | mileage }}</span>
+                {% if l.dealer_name %}<span>{{ l.dealer_name[:20] }}</span>{% endif %}
+                {% if l.exterior_color %}<span>{{ l.exterior_color }}</span>{% endif %}
+                {% if l.location %}<span>{{ l.location }}</span>{% endif %}
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty">
+        <h3>No listings yet</h3>
+        <p>Hit "Scrape All" to fetch car listings</p>
+    </div>
+{% endif %}
+
+{% if scrape_status.running %}
+<script>
+    setTimeout(function() { window.location.reload(); }, 5000);
+</script>
+{% endif %}
+
+{% endblock %}

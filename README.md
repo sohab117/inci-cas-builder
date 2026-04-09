@@ -111,6 +111,35 @@ Shows engine specs, MPG, safety ratings, recalls, and consumer complaints using 
 3. **Store**: Saves to local SQLite database (`car_tracker.db`)
 4. **Track**: Records price history on each scrape — run daily to catch price drops
 
+## Web Interface (Mobile-Friendly)
+
+Access the car tracker from your phone's browser:
+
+```bash
+python3 web.py
+```
+
+Then open `http://<your-computer-ip>:5000` on your phone (must be on the same Wi-Fi network).
+
+Find your computer's IP:
+```bash
+# macOS
+ipconfig getifaddr en0
+
+# Linux
+hostname -I
+
+# Windows
+ipconfig
+```
+
+The web UI lets you:
+- Scrape listings with one tap
+- Browse and filter by make, sort by price/year/mileage
+- View listing details and price history
+- See price drops at a glance
+- Look up specs and reliability for any car
+
 ## Tips
 
 - Run `scrape` once or twice daily to track price changes over time
