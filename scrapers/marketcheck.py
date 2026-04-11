@@ -13,8 +13,173 @@ MARKETCHECK_BASE_URL = "https://mc-api.marketcheck.com/v2/search/car/active"
 TIMEOUT = 30
 
 
+# Maps user-friendly model selections to (api_model, keywords, exclude_keywords).
+# - api_model is what we send to MarketCheck
+# - keywords filter results on our side (case-insensitive substring match
+#   across heading, build.trim, build.version, build.drivetrain). An empty
+#   keywords list means "keep all".
+# - exclude_keywords drops any result whose fields contain any of them.
+MODEL_VARIANTS: dict[str, dict] = {
+    # Infiniti
+    "G37x": {
+        "api_model": "G37",
+        "keywords": ["x", "awd", "4wd", "all wheel", "xAWD"],
+        "exclude_keywords": ["convertible", "coupe"],
+    },
+    "G37": {
+        "api_model": "G37",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "G37 Coupe": {
+        "api_model": "G37",
+        "keywords": ["coupe"],
+        "exclude_keywords": [],
+    },
+    "Q50": {
+        "api_model": "Q50",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "Q50 AWD": {
+        "api_model": "Q50",
+        "keywords": ["awd", "4wd", "all wheel", "sport"],
+        "exclude_keywords": [],
+    },
+    "Q60": {
+        "api_model": "Q60",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "Q60 AWD": {
+        "api_model": "Q60",
+        "keywords": ["awd", "4wd", "all wheel"],
+        "exclude_keywords": [],
+    },
+    "QX50": {
+        "api_model": "QX50",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "QX60": {
+        "api_model": "QX60",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+
+    # BMW
+    "3 Series": {
+        "api_model": "3 Series",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "3 Series xDrive": {
+        "api_model": "3 Series",
+        "keywords": ["xdrive", "awd", "xi"],
+        "exclude_keywords": [],
+    },
+    "5 Series": {
+        "api_model": "5 Series",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "5 Series xDrive": {
+        "api_model": "5 Series",
+        "keywords": ["xdrive", "xi"],
+        "exclude_keywords": [],
+    },
+    "X3": {
+        "api_model": "X3",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "X5": {
+        "api_model": "X5",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+
+    # Audi
+    "A4": {
+        "api_model": "A4",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "A4 quattro": {
+        "api_model": "A4",
+        "keywords": ["quattro", "awd"],
+        "exclude_keywords": [],
+    },
+    "A6": {
+        "api_model": "A6",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "A6 quattro": {
+        "api_model": "A6",
+        "keywords": ["quattro", "awd"],
+        "exclude_keywords": [],
+    },
+    "Q5": {
+        "api_model": "Q5",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+    "Q7": {
+        "api_model": "Q7",
+        "keywords": [],
+        "exclude_keywords": [],
+    },
+}
+
+
 def _api_key() -> str | None:
     return os.environ.get("MARKETCHECK_API_KEY")
+
+
+def _resolve_model(user_model: str | None) -> tuple[str | None, list[str], list[str]]:
+    """
+    Resolve a user-selected model to (api_model, keywords, exclude_keywords).
+    If not in MODEL_VARIANTS, return the input unchanged with empty filters.
+    """
+    if not user_model:
+        return None, [], []
+    variant = MODEL_VARIANTS.get(user_model)
+    if variant is None:
+        return user_model, [], []
+    return variant["api_model"], list(variant["keywords"]), list(variant["exclude_keywords"])
+
+
+def _matches_variant(raw: dict, keywords: list[str], exclude_keywords: list[str]) -> bool:
+    """
+    Decide whether a raw MarketCheck listing matches the variant filter.
+
+    Checks heading, build.trim, build.version, build.drivetrain (case-insensitive).
+    - Any exclude_keyword match always drops the listing.
+    - If keywords is empty, the listing passes.
+    - Otherwise at least one keyword must match.
+    """
+    build = raw.get("build") or {}
+    fields = [
+        raw.get("heading", ""),
+        build.get("trim", ""),
+        build.get("version", ""),
+        build.get("drivetrain", ""),
+    ]
+    haystack = " ".join(str(f) for f in fields if f).lower()
+
+    for ex in exclude_keywords:
+        if ex and ex.lower() in haystack:
+            return False
+
+    if not keywords:
+        return True
+
+    for kw in keywords:
+        if kw and kw.lower() in haystack:
+            return True
+
+    return False
 
 
 def _build_params(
@@ -60,12 +225,13 @@ def _map_listing(raw: dict) -> CarListing | None:
         build = raw.get("build") or {}
         dealer = raw.get("dealer") or {}
 
-        year = int(raw.get("year") or build.get("year") or 0)
+        # Read year/make/model from build.* per MarketCheck schema
+        year = int(build.get("year") or 0)
         if year == 0:
             return None
 
-        make = raw.get("make") or build.get("make") or ""
-        model = raw.get("model") or build.get("model") or ""
+        make = build.get("make") or ""
+        model = build.get("model") or ""
 
         price_val = raw.get("price")
         if price_val is None:
@@ -141,8 +307,9 @@ def count_marketcheck(
     if not _api_key():
         raise RuntimeError("MARKETCHECK_API_KEY environment variable not set")
 
+    api_model, _, _ = _resolve_model(model)
     params = _build_params(
-        make=make, model=model, year_min=year_min, year_max=year_max,
+        make=make, model=api_model, year_min=year_min, year_max=year_max,
         max_price=max_price, max_mileage=max_mileage,
         zip_code=zip_code, radius=radius, rows=1,
     )
@@ -150,7 +317,7 @@ def count_marketcheck(
     resp.raise_for_status()
     data = resp.json()
     total = _extract_total(data)
-    logger.info("MarketCheck count: %d", total)
+    logger.info("MarketCheck count: %d (model=%s api_model=%s)", total, model, api_model)
     return total
 
 
@@ -168,19 +335,25 @@ def search_marketcheck(
     """
     Search MarketCheck for active car listings.
 
-    Returns (total_count, listings).
+    Returns (total_count, listings) where total_count is what MarketCheck
+    reports at the API level (before client-side variant filtering).
     """
     if not _api_key():
         raise RuntimeError("MARKETCHECK_API_KEY environment variable not set")
 
+    api_model, keywords, exclude_keywords = _resolve_model(model)
+
     rows = min(max(int(rows), 1), 100)
     params = _build_params(
-        make=make, model=model, year_min=year_min, year_max=year_max,
+        make=make, model=api_model, year_min=year_min, year_max=year_max,
         max_price=max_price, max_mileage=max_mileage,
         zip_code=zip_code, radius=radius, rows=rows,
     )
 
-    logger.info("MarketCheck: searching make=%s model=%s rows=%d", make, model, rows)
+    logger.info(
+        "MarketCheck: searching make=%s model=%s api_model=%s keywords=%s rows=%d",
+        make, model, api_model, keywords, rows,
+    )
     resp = requests.get(MARKETCHECK_BASE_URL, params=params, timeout=TIMEOUT)
     resp.raise_for_status()
     data = resp.json()
@@ -190,9 +363,14 @@ def search_marketcheck(
 
     listings: list[CarListing] = []
     for raw in raw_listings:
+        if not _matches_variant(raw, keywords, exclude_keywords):
+            continue
         mapped = _map_listing(raw)
         if mapped is not None:
             listings.append(mapped)
 
-    logger.info("MarketCheck: total=%d, parsed=%d", total, len(listings))
+    logger.info(
+        "MarketCheck: total=%d, raw=%d, kept_after_variant_filter=%d",
+        total, len(raw_listings), len(listings),
+    )
     return total, listings

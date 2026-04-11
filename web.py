@@ -192,6 +192,42 @@ def api_delete_search(search_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/test-marketcheck")
+def api_test_marketcheck():
+    """Diagnostic: run a fixed Infiniti G37x search and return count + first 3 listings."""
+    try:
+        total, listings = search_marketcheck(
+            make="Infiniti",
+            model="G37x",
+            year_min=2007,
+            year_max=2013,
+            max_price=20000,
+            zip_code="60515",
+            radius=100,
+            rows=50,
+        )
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }), 500
+
+    return jsonify({
+        "query": {
+            "make": "Infiniti",
+            "model": "G37x",
+            "year_min": 2007,
+            "year_max": 2013,
+            "max_price": 20000,
+            "zip_code": "60515",
+            "radius": 100,
+        },
+        "total": total,
+        "returned_after_filter": len(listings),
+        "first_3": [l.to_dict() for l in listings[:3]],
+    })
+
+
 @app.route("/listing/<int:listing_id>")
 def listing_detail(listing_id):
     db = CarDatabase(DB_PATH)

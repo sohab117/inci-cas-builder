@@ -97,8 +97,9 @@
         </div>
         <div class="form-group">
             <label>Model</label>
-            <input type="text" name="model" id="model-input" list="model-options" placeholder="Any">
-            <datalist id="model-options"></datalist>
+            <select name="model" id="model-select">
+                <option value="">Any</option>
+            </select>
         </div>
         <div class="form-group">
             <label>Year Min</label>
@@ -171,12 +172,46 @@
 <div id="results-container"></div>
 
 <script>
+// Each entry is [value, label]. The value is what's submitted (and used to
+// look up MODEL_VARIANTS on the backend). The label is what the user sees.
 const MAKES_MODELS = {
-    "Infiniti":       ["G37", "Q50", "Q60", "QX50", "QX60"],
-    "BMW":            ["3 Series", "5 Series", "X3", "X5"],
-    "Audi":           ["A4", "A6", "Q5"],
-    "Mercedes-Benz":  ["C-Class", "E-Class", "GLC"],
-    "Lexus":          ["IS", "ES", "RX"],
+    "Infiniti": [
+        ["G37x",      "G37x (AWD)"],
+        ["G37",       "G37 (All)"],
+        ["G37 Coupe", "G37 Coupe"],
+        ["Q50",       "Q50"],
+        ["Q50 AWD",   "Q50 AWD"],
+        ["Q60",       "Q60"],
+        ["Q60 AWD",   "Q60 AWD"],
+        ["QX50",      "QX50"],
+        ["QX60",      "QX60"],
+    ],
+    "BMW": [
+        ["3 Series",         "3 Series"],
+        ["3 Series xDrive",  "3 Series xDrive"],
+        ["5 Series",         "5 Series"],
+        ["5 Series xDrive",  "5 Series xDrive"],
+        ["X3",               "X3"],
+        ["X5",               "X5"],
+    ],
+    "Audi": [
+        ["A4",          "A4"],
+        ["A4 quattro",  "A4 quattro"],
+        ["A6",          "A6"],
+        ["A6 quattro",  "A6 quattro"],
+        ["Q5",          "Q5"],
+        ["Q7",          "Q7"],
+    ],
+    "Mercedes-Benz": [
+        ["C-Class", "C-Class"],
+        ["E-Class", "E-Class"],
+        ["GLC",     "GLC"],
+    ],
+    "Lexus": [
+        ["IS", "IS"],
+        ["ES", "ES"],
+        ["RX", "RX"],
+    ],
 };
 
 let currentResults = [];
@@ -185,8 +220,7 @@ let currentAbortController = null;
 
 const form = document.getElementById('search-form');
 const makeSelect = document.getElementById('make-select');
-const modelInput = document.getElementById('model-input');
-const modelOptions = document.getElementById('model-options');
+const modelSelect = document.getElementById('model-select');
 const searchBtn = document.getElementById('search-btn');
 const stopBtn = document.getElementById('stop-btn');
 const saveBtn = document.getElementById('save-btn');
@@ -196,7 +230,8 @@ const resultsContainer = document.getElementById('results-container');
 
 function updateModelSuggestions() {
     const models = MAKES_MODELS[makeSelect.value] || [];
-    modelOptions.innerHTML = models.map(m => `<option value="${m}">`).join('');
+    modelSelect.innerHTML = '<option value="">Any</option>' +
+        models.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
 }
 makeSelect.addEventListener('change', updateModelSuggestions);
 
@@ -376,14 +411,17 @@ document.querySelectorAll('.chip').forEach(chip => {
     // Clicking the label (not the delete button) populates the form
     chip.querySelector('.chip-label').addEventListener('click', () => {
         const s = JSON.parse(chip.dataset.search);
-        const fields = ['make', 'model', 'year_min', 'year_max',
+        // Set make first so updateModelSuggestions() builds the correct options,
+        // then set model (otherwise the <select>.value assignment is silently ignored).
+        if (s.make != null) form.elements.make.value = s.make;
+        updateModelSuggestions();
+        const fields = ['model', 'year_min', 'year_max',
                         'max_price', 'max_mileage', 'zip_code', 'radius'];
         fields.forEach(k => {
             if (form.elements[k] && s[k] != null && s[k] !== '') {
                 form.elements[k].value = s[k];
             }
         });
-        updateModelSuggestions();
         window.scrollTo({top: 0, behavior: 'smooth'});
     });
 });
