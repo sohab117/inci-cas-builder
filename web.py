@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Flask web interface for Car Tracker — mobile-friendly."""
+"""Flask web interface for Car Tracker — MarketCheck-powered search."""
 
 import logging
 import os
-import threading
+from urllib.parse import urlencode
 
-import requests
-import yaml
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, jsonify
 
-from scrapers import scrape_all
-from dedup import make_dedup_key, deduplicate
+from scrapers.marketcheck import search_marketcheck, count_marketcheck
+from dedup import make_dedup_key
 from storage import CarDatabase
 from car_info import (
     get_fuel_economy, get_safety_ratings, get_recalls, get_complaints, star_rating,
@@ -21,92 +19,177 @@ DB_PATH = os.path.join(os.getcwd(), "car_tracker.db")
 
 app = Flask(__name__)
 
-# Track scrape status
-scrape_status = {"running": False, "message": ""}
+# Thresholds for pre-scrape count check
+WARN_THRESHOLD = 300
+BLOCK_THRESHOLD = 500
 
 
-def load_config():
-    with open(CONFIG_PATH, "r") as f:
-        return yaml.safe_load(f)
+def _to_int(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _extract_search_params(data: dict) -> dict:
+    """Pull search params from a request body (JSON or form)."""
+    return {
+        "make": (data.get("make") or "").strip() or None,
+        "model": (data.get("model") or "").strip() or None,
+        "year_min": _to_int(data.get("year_min")),
+        "year_max": _to_int(data.get("year_max")),
+        "max_price": _to_int(data.get("max_price")),
+        "max_mileage": _to_int(data.get("max_mileage")),
+        "zip_code": (data.get("zip_code") or "").strip() or None,
+        "radius": _to_int(data.get("radius")),
+    }
+
+
+def _build_cars_com_url(params: dict) -> str:
+    """Build a Cars.com fallback URL for when results exceed the block threshold."""
+    qs = {"stock_type": "used"}
+    if params.get("make"):
+        qs["makes[]"] = params["make"].lower()
+    if params.get("make") and params.get("model"):
+        model_slug = params["model"].lower().replace(" ", "_")
+        qs["models[]"] = f"{params['make'].lower()}-{model_slug}"
+    if params.get("zip_code"):
+        qs["zip"] = params["zip_code"]
+    if params.get("radius"):
+        qs["maximum_distance"] = str(params["radius"])
+    if params.get("max_price"):
+        qs["priceMax"] = str(params["max_price"])
+    if params.get("max_mileage"):
+        qs["mileageMax"] = str(params["max_mileage"])
+    return f"https://www.cars.com/shopping/results/?{urlencode(qs)}"
+
+
+def _compute_deal_score(price: int, avg_price: float) -> str:
+    if avg_price <= 0:
+        return "fair"
+    if price < avg_price * 0.9:
+        return "good"
+    if price > avg_price * 1.1:
+        return "high"
+    return "fair"
 
 
 @app.route("/")
 def index():
     db = CarDatabase(DB_PATH)
-    config = load_config()
-    search = config["search"]
-
-    make_filter = request.args.get("make")
-    sort_by = request.args.get("sort", "price")
-
-    listings = db.get_all_listings(make=make_filter, sort_by=sort_by)
-    summary = db.get_summary()
-    drops = db.get_price_drops()
+    saved = db.get_saved_searches()
     db.close()
-
-    # Get unique makes for filter buttons
-    makes = sorted(set(l["make"] for l in listings)) if listings else []
-    all_makes = sorted(set(row["make"] for row in summary.get("by_make", [])))
-
-    return render_template(
-        "index.html",
-        listings=listings,
-        summary=summary,
-        drops=drops,
-        search=search,
-        makes=all_makes,
-        current_make=make_filter,
-        current_sort=sort_by,
-        scrape_status=scrape_status,
-    )
+    return render_template("index.html", saved_searches=saved)
 
 
-@app.route("/scrape", methods=["POST"])
-def scrape():
-    if scrape_status["running"]:
-        return redirect(url_for("index"))
+@app.route("/api/search", methods=["POST"])
+def api_search():
+    """Run a MarketCheck search. Pre-check count, block or warn if too large."""
+    data = request.get_json(silent=True) or request.form
+    params = _extract_search_params(data)
 
-    source = request.form.get("source")
+    # Pre-scrape count check
+    try:
+        total = count_marketcheck(**params)
+    except Exception as e:
+        return jsonify({"error": f"Count check failed: {e}"}), 500
 
-    def run_scrape():
-        scrape_status["running"] = True
-        scrape_status["message"] = "Scraping..."
-        try:
-            config = load_config()
-            search_cfg = config["search"]
-            vehicles = config["vehicles"]
-            sources = [source] if source else config.get("sources", ["cars_com", "cargurus"])
+    if total > BLOCK_THRESHOLD:
+        return jsonify({
+            "blocked": True,
+            "total": total,
+            "message": (
+                f"Too many results ({total}). Narrow your search and try again, "
+                f"or open Cars.com directly."
+            ),
+            "cars_com_url": _build_cars_com_url(params),
+        })
 
-            listings = scrape_all(
-                sources, search_cfg["zip"], search_cfg["radius"],
-                vehicles, search_cfg["max_price"],
-            )
+    warning = None
+    if total > WARN_THRESHOLD:
+        warning = (
+            f"Large result set ({total}). Consider narrowing by adding a model, "
+            f"tightening the year range, or reducing the radius."
+        )
 
-            db = CarDatabase(DB_PATH)
-            new_count = 0
-            updated_count = 0
-            for listing in listings:
-                key = make_dedup_key(listing)
-                _, price_changed = db.upsert_listing(listing, key)
-                row = db.conn.execute(
-                    "SELECT first_seen, last_seen FROM listings WHERE source=? AND listing_id=?",
-                    (listing.source, listing.listing_id)
-                ).fetchone()
-                if row and row["first_seen"] == row["last_seen"]:
-                    new_count += 1
-                elif price_changed:
-                    updated_count += 1
-            db.close()
+    # Run the full search (capped at 100 rows per MarketCheck API limits)
+    try:
+        _, listings = search_marketcheck(**params, rows=100)
+    except Exception as e:
+        return jsonify({"error": f"Search failed: {e}"}), 500
 
-            scrape_status["message"] = f"Done! {len(listings)} fetched, {new_count} new, {updated_count} price changes"
-        except Exception as e:
-            scrape_status["message"] = f"Error: {e}"
-        finally:
-            scrape_status["running"] = False
+    # Upsert to DB so price history + /drops + /listing routes keep working
+    db = CarDatabase(DB_PATH)
+    try:
+        for listing in listings:
+            key = make_dedup_key(listing)
+            db.upsert_listing(listing, key)
+    finally:
+        db.close()
 
-    thread = threading.Thread(target=run_scrape, daemon=True)
-    thread.start()
-    return redirect(url_for("index"))
+    # Compute deal scores relative to the average price in this result set
+    prices = [l.price for l in listings if l.price]
+    avg_price = sum(prices) / len(prices) if prices else 0.0
+
+    result_list = []
+    db = CarDatabase(DB_PATH)
+    try:
+        for listing in listings:
+            # Look up the DB id so listing cards can link to /listing/<id>
+            row = db.conn.execute(
+                "SELECT id FROM listings WHERE source=? AND listing_id=?",
+                (listing.source, listing.listing_id),
+            ).fetchone()
+            d = listing.to_dict()
+            d["id"] = row["id"] if row else None
+            d["deal_score"] = _compute_deal_score(listing.price, avg_price)
+            result_list.append(d)
+    finally:
+        db.close()
+
+    return jsonify({
+        "total": total,
+        "returned": len(result_list),
+        "avg_price": int(avg_price),
+        "warning": warning,
+        "listings": result_list,
+    })
+
+
+@app.route("/api/save-search", methods=["POST"])
+def api_save_search():
+    data = request.get_json(silent=True) or request.form
+    name = (data.get("name") or "").strip() or "Unnamed Search"
+    params = _extract_search_params(data)
+
+    db = CarDatabase(DB_PATH)
+    try:
+        search_id = db.save_search(
+            name=name,
+            make=params["make"],
+            model=params["model"],
+            year_min=params["year_min"],
+            year_max=params["year_max"],
+            max_price=params["max_price"],
+            max_mileage=params["max_mileage"],
+            zip_code=params["zip_code"],
+            radius=params["radius"],
+        )
+    finally:
+        db.close()
+    return jsonify({"ok": True, "id": search_id})
+
+
+@app.route("/api/delete-search/<int:search_id>", methods=["POST"])
+def api_delete_search(search_id):
+    db = CarDatabase(DB_PATH)
+    try:
+        db.delete_saved_search(search_id)
+    finally:
+        db.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/listing/<int:listing_id>")
@@ -149,44 +232,6 @@ def info():
     )
 
 
-@app.route("/api/status")
-def api_status():
-    return jsonify(scrape_status)
-
-
-@app.route("/test-scrape")
-def test_scrape():
-    """Diagnostic: fetch a Cars.com search page and return status/body/headers."""
-    url = (
-        "https://www.cars.com/shopping/results/"
-        "?stock_type=used&makes[]=infiniti&models[]=infiniti-g37"
-        "&zip=60515&maximum_distance=40&priceMax=20000"
-    )
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-    try:
-        resp = requests.get(url, headers=headers, timeout=20)
-        return jsonify({
-            "url": url,
-            "status_code": resp.status_code,
-            "body_preview": resp.text[:500],
-            "headers": dict(resp.headers),
-        })
-    except Exception as e:
-        return jsonify({
-            "url": url,
-            "error": str(e),
-            "error_type": type(e).__name__,
-        }), 500
-
-
 @app.template_filter("currency")
 def currency_filter(value):
     if value is None:
@@ -209,6 +254,5 @@ if __name__ == "__main__":
     print("  Phone:   http://<your-ip>:5000")
     print("  (Find your IP with: hostname -I or ipconfig)")
     print()
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

@@ -1,112 +1,408 @@
 {% extends "base.html" %}
-{% block subtitle %}{{ search.zip }} &bull; {{ search.radius }}mi &bull; Under {{ search.max_price | currency }}{% endblock %}
+{% block subtitle %}Search powered by MarketCheck{% endblock %}
 
 {% block content %}
+<style>
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    @media (min-width: 600px) {
+        .form-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+        flex-wrap: wrap;
+    }
+    .saved-section { margin-bottom: 16px; }
+    .saved-section h4 {
+        font-size: 12px;
+        color: #71717a;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+    .saved-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #27272a;
+        border: 1px solid #3f3f46;
+        color: #e4e4e7;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .chip:hover { background: #3f3f46; }
+    .chip .del {
+        background: none;
+        border: none;
+        color: #71717a;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 0 0 0 4px;
+    }
+    .chip .del:hover { color: #ef4444; }
+    .results-header {
+        font-size: 13px;
+        color: #a1a1aa;
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        background: #1a1b23;
+        border-radius: 8px;
+        border: 1px solid #2a2b35;
+    }
+    .deal-good { background: #14332a; color: #4ade80; }
+    .deal-fair { background: #3a2f14; color: #facc15; }
+    .deal-high { background: #3b1219; color: #f87171; }
+</style>
 
-<!-- Scrape Actions -->
-<div class="scrape-actions">
-    <form method="POST" action="/scrape" style="display:inline">
-        <button type="submit" class="btn btn-primary" {% if scrape_status.running %}disabled{% endif %}>
-            {% if scrape_status.running %}Scraping...{% else %}Scrape All{% endif %}
-        </button>
-    </form>
-    <form method="POST" action="/scrape" style="display:inline">
-        <input type="hidden" name="source" value="cars_com">
-        <button type="submit" class="btn btn-sm btn-outline" {% if scrape_status.running %}disabled{% endif %}>Cars.com</button>
-    </form>
-    <form method="POST" action="/scrape" style="display:inline">
-        <input type="hidden" name="source" value="cargurus">
-        <button type="submit" class="btn btn-sm btn-outline" {% if scrape_status.running %}disabled{% endif %}>CarGurus</button>
-    </form>
-</div>
+<div class="section-title">Search Cars</div>
 
-{% if scrape_status.message %}
-<div class="status-banner {% if 'Error' in scrape_status.message %}error{% endif %}">
-    {{ scrape_status.message }}
+{% if saved_searches %}
+<div class="saved-section">
+    <h4>Saved Searches</h4>
+    <div class="saved-chips">
+        {% for s in saved_searches %}
+        <span class="chip" data-search='{{ s | tojson }}'>
+            <span class="chip-label">{{ s.name }}</span>
+            <button type="button" class="del" data-id="{{ s.id }}" title="Delete">&times;</button>
+        </span>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 
-<!-- Stats -->
-{% if summary.total > 0 %}
-<div class="stats">
-    <div class="stat-card">
-        <div class="number">{{ summary.total }}</div>
-        <div class="label">Total</div>
+<form id="search-form">
+    <div class="form-grid">
+        <div class="form-group">
+            <label>Make</label>
+            <select name="make" id="make-select">
+                <option value="">All</option>
+                <option value="Infiniti">Infiniti</option>
+                <option value="BMW">BMW</option>
+                <option value="Audi">Audi</option>
+                <option value="Mercedes-Benz">Mercedes-Benz</option>
+                <option value="Lexus">Lexus</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Model</label>
+            <input type="text" name="model" id="model-input" list="model-options" placeholder="Any">
+            <datalist id="model-options"></datalist>
+        </div>
+        <div class="form-group">
+            <label>Year Min</label>
+            <select name="year_min">
+                <option value="">Any</option>
+                {% for y in range(2024, 2004, -1) %}
+                <option value="{{ y }}">{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Year Max</label>
+            <select name="year_max">
+                {% for y in range(2024, 2004, -1) %}
+                <option value="{{ y }}" {% if y == 2024 %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Max Price</label>
+            <select name="max_price">
+                <option value="10000">$10,000</option>
+                <option value="15000">$15,000</option>
+                <option value="20000" selected>$20,000</option>
+                <option value="25000">$25,000</option>
+                <option value="30000">$30,000</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Max Mileage</label>
+            <select name="max_mileage">
+                <option value="50000">50,000 mi</option>
+                <option value="75000">75,000 mi</option>
+                <option value="100000" selected>100,000 mi</option>
+                <option value="125000">125,000 mi</option>
+                <option value="150000">150,000 mi</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>ZIP Code</label>
+            <input type="text" name="zip_code" value="60515" maxlength="5">
+        </div>
+        <div class="form-group">
+            <label>Radius</label>
+            <select name="radius">
+                <option value="25">25 mi</option>
+                <option value="40" selected>40 mi</option>
+                <option value="50">50 mi</option>
+                <option value="75">75 mi</option>
+                <option value="100">100 mi</option>
+            </select>
+        </div>
     </div>
-    {% for row in summary.by_make %}
-    <div class="stat-card">
-        <div class="number">{{ row.c }}</div>
-        <div class="label">{{ row.make }}</div>
+    <div class="form-actions">
+        <button type="submit" id="search-btn" class="btn btn-primary">Search</button>
+        <button type="button" id="stop-btn" class="btn btn-danger" style="display:none">Stop</button>
+        <button type="button" id="save-btn" class="btn btn-outline" style="display:none">Save This Search</button>
     </div>
-    {% endfor %}
-    {% if drops %}
-    <div class="stat-card">
-        <div class="number" style="color:#ef4444">{{ drops | length }}</div>
-        <div class="label">Drops</div>
-    </div>
-    {% endif %}
-</div>
-{% endif %}
+</form>
 
-<!-- Filters -->
-{% if makes %}
-<div class="filters">
-    <a href="/?sort={{ current_sort }}" class="btn btn-sm {% if not current_make %}btn-primary{% else %}btn-outline{% endif %}">All</a>
-    {% for make in makes %}
-    <a href="/?make={{ make }}&sort={{ current_sort }}" class="btn btn-sm {% if current_make == make %}btn-primary{% else %}btn-outline{% endif %}">{{ make }}</a>
-    {% endfor %}
-</div>
-<div class="filters">
-    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=price" class="btn btn-sm {% if current_sort == 'price' %}btn-primary{% else %}btn-outline{% endif %}">Price</a>
-    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=year" class="btn btn-sm {% if current_sort == 'year' %}btn-primary{% else %}btn-outline{% endif %}">Year</a>
-    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=mileage" class="btn btn-sm {% if current_sort == 'mileage' %}btn-primary{% else %}btn-outline{% endif %}">Mileage</a>
-    <a href="/?{% if current_make %}make={{ current_make }}&{% endif %}sort=newest" class="btn btn-sm {% if current_sort == 'newest' %}btn-primary{% else %}btn-outline{% endif %}">Newest</a>
-</div>
-{% endif %}
+<div id="results-info" style="display:none; margin-top:14px"></div>
 
-<!-- Listings -->
-{% if listings %}
-    {% for l in listings %}
-    <div class="card">
-        <a href="/listing/{{ l.id }}">
-            <div style="display:flex; justify-content:space-between; align-items:start">
-                <div class="card-title">{{ l.year }} {{ l.make }} {{ l.model }}</div>
-                <span class="badge badge-source">{{ l.source }}</span>
-            </div>
-            <div class="card-price">{{ l.price | currency }}</div>
-            <div class="card-meta">
-                <span>{{ l.mileage | mileage }}</span>
-                {% if l.dealer_name %}<span>{{ l.dealer_name[:20] }}</span>{% endif %}
-                {% if l.exterior_color %}<span>{{ l.exterior_color }}</span>{% endif %}
-                {% if l.location %}<span>{{ l.location }}</span>{% endif %}
-            </div>
-        </a>
-    </div>
-    {% endfor %}
-{% else %}
-    <div class="empty">
-        <h3>No listings yet</h3>
-        <p>Hit "Scrape All" to fetch car listings</p>
-    </div>
-{% endif %}
+<div id="sort-bar" style="display:none; margin-top:12px" class="filters">
+    <button class="btn btn-sm btn-outline sort-btn" data-sort="price-asc">Price &uarr;</button>
+    <button class="btn btn-sm btn-outline sort-btn" data-sort="price-desc">Price &darr;</button>
+    <button class="btn btn-sm btn-outline sort-btn" data-sort="year-desc">Year &darr;</button>
+    <button class="btn btn-sm btn-outline sort-btn" data-sort="mileage-asc">Mileage &uarr;</button>
+</div>
 
-{% if scrape_status.running %}
+<div id="results-container"></div>
+
 <script>
-    (function poll() {
-        fetch('/api/status')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (!data.running) {
-                    window.location.reload();
-                } else {
-                    setTimeout(poll, 3000);
-                }
-            })
-            .catch(function() {
-                setTimeout(poll, 3000);
-            });
-    })();
-</script>
-{% endif %}
+const MAKES_MODELS = {
+    "Infiniti":       ["G37", "Q50", "Q60", "QX50", "QX60"],
+    "BMW":            ["3 Series", "5 Series", "X3", "X5"],
+    "Audi":           ["A4", "A6", "Q5"],
+    "Mercedes-Benz":  ["C-Class", "E-Class", "GLC"],
+    "Lexus":          ["IS", "ES", "RX"],
+};
 
+let currentResults = [];
+let currentParams = {};
+let currentAbortController = null;
+
+const form = document.getElementById('search-form');
+const makeSelect = document.getElementById('make-select');
+const modelInput = document.getElementById('model-input');
+const modelOptions = document.getElementById('model-options');
+const searchBtn = document.getElementById('search-btn');
+const stopBtn = document.getElementById('stop-btn');
+const saveBtn = document.getElementById('save-btn');
+const resultsInfo = document.getElementById('results-info');
+const sortBar = document.getElementById('sort-bar');
+const resultsContainer = document.getElementById('results-container');
+
+function updateModelSuggestions() {
+    const models = MAKES_MODELS[makeSelect.value] || [];
+    modelOptions.innerHTML = models.map(m => `<option value="${m}">`).join('');
+}
+makeSelect.addEventListener('change', updateModelSuggestions);
+
+function setSearching(searching) {
+    searchBtn.disabled = searching;
+    searchBtn.textContent = searching ? 'Searching...' : 'Search';
+    stopBtn.style.display = searching ? 'inline-flex' : 'none';
+}
+
+function showError(msg) {
+    resultsInfo.innerHTML = `<div class="status-banner error">Error: ${escapeHtml(msg)}</div>`;
+    resultsInfo.style.display = 'block';
+    sortBar.style.display = 'none';
+    saveBtn.style.display = 'none';
+    resultsContainer.innerHTML = '';
+}
+
+function showBlocked(data) {
+    resultsInfo.innerHTML = `
+        <div class="status-banner error">
+            <div>${escapeHtml(data.message)}</div>
+            <a href="${data.cars_com_url}" target="_blank" rel="noopener"
+               class="btn btn-sm btn-primary" style="margin-top:8px; display:inline-flex">
+               Open Cars.com
+            </a>
+        </div>
+    `;
+    resultsInfo.style.display = 'block';
+    sortBar.style.display = 'none';
+    saveBtn.style.display = 'none';
+    resultsContainer.innerHTML = '';
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+function renderResults(data) {
+    const warningHtml = data.warning
+        ? `<div class="status-banner" style="margin-bottom:8px">${escapeHtml(data.warning)}</div>`
+        : '';
+    const avgHtml = data.avg_price
+        ? ` &bull; Avg in this set: $${data.avg_price.toLocaleString()}`
+        : '';
+    resultsInfo.innerHTML = `
+        ${warningHtml}
+        <div class="results-header">Found <strong>${data.total}</strong> total &mdash; showing ${data.returned}${avgHtml}</div>
+    `;
+    resultsInfo.style.display = 'block';
+    sortBar.style.display = currentResults.length ? 'flex' : 'none';
+    saveBtn.style.display = 'inline-flex';
+    renderList(currentResults);
+}
+
+function renderList(listings) {
+    if (!listings.length) {
+        resultsContainer.innerHTML = '<div class="empty"><h3>No results</h3><p>Try adjusting your filters.</p></div>';
+        return;
+    }
+    resultsContainer.innerHTML = listings.map(l => {
+        const dealLabel =
+            l.deal_score === 'good' ? '🟢 Good Deal' :
+            l.deal_score === 'high' ? '🔴 High Price' : '🟡 Fair';
+        const dealClass =
+            l.deal_score === 'good' ? 'deal-good' :
+            l.deal_score === 'high' ? 'deal-high' : 'deal-fair';
+        const mileage = l.mileage ? l.mileage.toLocaleString() + ' mi' : 'N/A';
+        const price = l.price ? '$' + l.price.toLocaleString() : 'N/A';
+        const href = l.url || '#';
+        const dealer = l.dealer_name ? `<span>${escapeHtml(l.dealer_name)}</span>` : '';
+        const location = l.location ? `<span>${escapeHtml(l.location)}</span>` : '';
+        return `
+            <div class="card">
+                <a href="${escapeHtml(href)}" target="_blank" rel="noopener">
+                    <div style="display:flex; justify-content:space-between; align-items:start; gap:8px">
+                        <div class="card-title">${l.year} ${escapeHtml(l.make)} ${escapeHtml(l.model)}</div>
+                        <span class="badge ${dealClass}">${dealLabel}</span>
+                    </div>
+                    <div class="card-price">${price}</div>
+                    <div class="card-meta">
+                        <span>${mileage}</span>
+                        ${dealer}
+                        ${location}
+                    </div>
+                </a>
+            </div>
+        `;
+    }).join('');
+}
+
+async function runSearch() {
+    const formData = new FormData(form);
+    const params = {};
+    formData.forEach((v, k) => { if (v !== '') params[k] = v; });
+    currentParams = params;
+
+    setSearching(true);
+    resultsInfo.innerHTML = '<div class="status-banner">Searching MarketCheck...</div>';
+    resultsInfo.style.display = 'block';
+    sortBar.style.display = 'none';
+    saveBtn.style.display = 'none';
+    resultsContainer.innerHTML = '';
+
+    currentAbortController = new AbortController();
+    try {
+        const resp = await fetch('/api/search', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(params),
+            signal: currentAbortController.signal,
+        });
+        const data = await resp.json();
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        if (data.blocked) {
+            showBlocked(data);
+            return;
+        }
+        currentResults = data.listings || [];
+        renderResults(data);
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            resultsInfo.innerHTML = '<div class="status-banner">Search stopped.</div>';
+        } else {
+            showError(err.message);
+        }
+    } finally {
+        setSearching(false);
+    }
+}
+
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    runSearch();
+});
+
+stopBtn.addEventListener('click', () => {
+    if (currentAbortController) currentAbortController.abort();
+});
+
+document.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const sort = btn.dataset.sort;
+        const sorted = [...currentResults];
+        if (sort === 'price-asc') sorted.sort((a, b) => (a.price || 0) - (b.price || 0));
+        else if (sort === 'price-desc') sorted.sort((a, b) => (b.price || 0) - (a.price || 0));
+        else if (sort === 'year-desc') sorted.sort((a, b) => (b.year || 0) - (a.year || 0));
+        else if (sort === 'mileage-asc') sorted.sort((a, b) => (a.mileage || 999999) - (b.mileage || 999999));
+        renderList(sorted);
+    });
+});
+
+saveBtn.addEventListener('click', async () => {
+    const name = prompt('Name for this search:');
+    if (!name) return;
+    const body = {...currentParams, name};
+    try {
+        const resp = await fetch('/api/save-search', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+            window.location.reload();
+        }
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
+});
+
+// Saved search chip handlers
+document.querySelectorAll('.chip').forEach(chip => {
+    // Clicking the label (not the delete button) populates the form
+    chip.querySelector('.chip-label').addEventListener('click', () => {
+        const s = JSON.parse(chip.dataset.search);
+        const fields = ['make', 'model', 'year_min', 'year_max',
+                        'max_price', 'max_mileage', 'zip_code', 'radius'];
+        fields.forEach(k => {
+            if (form.elements[k] && s[k] != null && s[k] !== '') {
+                form.elements[k].value = s[k];
+            }
+        });
+        updateModelSuggestions();
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+});
+
+document.querySelectorAll('.chip .del').forEach(del => {
+    del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete this saved search?')) return;
+        const id = del.dataset.id;
+        try {
+            const resp = await fetch(`/api/delete-search/${id}`, {method: 'POST'});
+            if (resp.ok) window.location.reload();
+        } catch (err) {
+            alert('Failed to delete: ' + err.message);
+        }
+    });
+});
+
+// Initialize
+updateModelSuggestions();
+</script>
 {% endblock %}

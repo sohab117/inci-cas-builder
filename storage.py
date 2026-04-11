@@ -37,6 +37,20 @@ class CarDatabase:
                 recorded_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS saved_searches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                make TEXT,
+                model TEXT,
+                year_min INTEGER,
+                year_max INTEGER,
+                max_price INTEGER,
+                max_mileage INTEGER,
+                zip_code TEXT,
+                radius INTEGER,
+                created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_listings_make ON listings(make);
             CREATE INDEX IF NOT EXISTS idx_listings_dedup ON listings(dedup_key);
             CREATE INDEX IF NOT EXISTS idx_price_history_listing ON price_history(listing_id);
@@ -165,6 +179,31 @@ class CarDatabase:
     def get_listing_by_id(self, listing_db_id: int) -> dict | None:
         row = self.conn.execute("SELECT * FROM listings WHERE id = ?", (listing_db_id,)).fetchone()
         return dict(row) if row else None
+
+    def save_search(self, name: str, make: str | None, model: str | None,
+                    year_min: int | None, year_max: int | None,
+                    max_price: int | None, max_mileage: int | None,
+                    zip_code: str | None, radius: int | None) -> int:
+        cur = self.conn.execute(
+            """INSERT INTO saved_searches
+               (name, make, model, year_min, year_max, max_price,
+                max_mileage, zip_code, radius, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, make, model, year_min, year_max, max_price,
+             max_mileage, zip_code, radius, now_iso()),
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def get_saved_searches(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM saved_searches ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_saved_search(self, search_id: int):
+        self.conn.execute("DELETE FROM saved_searches WHERE id = ?", (search_id,))
+        self.conn.commit()
 
     def close(self):
         self.conn.close()

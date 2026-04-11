@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Car Tracker — track used car listings from Cars.com, CarGurus, and AutoTempest."""
+"""Car Tracker — search used car listings via the MarketCheck API."""
 
 import argparse
 import logging
@@ -8,8 +8,8 @@ import sys
 
 import yaml
 
-from scrapers import scrape_all
-from dedup import make_dedup_key, deduplicate
+from scrapers.marketcheck import search_marketcheck
+from dedup import make_dedup_key
 from storage import CarDatabase
 from display import (
     print_listings, print_price_drops, print_price_history,
@@ -29,35 +29,43 @@ def cmd_scrape(args, config: dict):
     search = config["search"]
     vehicles = config["vehicles"]
 
-    sources = config.get("sources", ["cars_com", "cargurus"])
-    if args.source:
-        sources = [args.source]
-
     zip_code = args.zip or search["zip"]
     radius = args.radius or search["radius"]
     max_price = args.max_price or search["max_price"]
 
-    print(f"\n  Scraping used cars under ${max_price:,} within {radius}mi of {zip_code}...")
-    print(f"  Sources: {', '.join(sources)}")
+    print(f"\n  Searching MarketCheck for used cars under ${max_price:,} within {radius}mi of {zip_code}...")
     vehicle_strs = [f"{v['make']} ({', '.join(v['models'])})" for v in vehicles]
     print(f"  Vehicles: {', '.join(vehicle_strs)}")
     print()
 
-    listings = scrape_all(sources, zip_code, radius, vehicles, max_price)
-    print(f"  Raw results: {len(listings)} listings from all sources")
+    all_listings = []
+    for v in vehicles:
+        make = v["make"]
+        for model in v.get("models", []):
+            print(f"    {make} {model}...", end=" ", flush=True)
+            try:
+                total, listings = search_marketcheck(
+                    make=make,
+                    model=model,
+                    max_price=max_price,
+                    zip_code=zip_code,
+                    radius=radius,
+                    rows=100,
+                )
+                print(f"total={total}, fetched={len(listings)}")
+                all_listings.extend(listings)
+            except Exception as e:
+                print(f"failed: {e}")
 
-    unique = deduplicate(listings)
-    print(f"  After dedup:  {len(unique)} unique listings")
+    print(f"\n  Total fetched: {len(all_listings)} listings")
 
     db = CarDatabase(DB_PATH)
     new_count = 0
     updated_count = 0
 
-    for listing in listings:
+    for listing in all_listings:
         key = make_dedup_key(listing)
         _, price_changed = db.upsert_listing(listing, key)
-        # Check if this was a new insert by seeing if price_changed is False
-        # (new inserts return price_changed=False)
         row = db.conn.execute(
             "SELECT first_seen, last_seen FROM listings WHERE source=? AND listing_id=?",
             (listing.source, listing.listing_id)
@@ -68,7 +76,7 @@ def cmd_scrape(args, config: dict):
             updated_count += 1
 
     db.close()
-    print_scrape_results(len(listings), new_count, updated_count)
+    print_scrape_results(len(all_listings), new_count, updated_count)
 
 
 def cmd_list(args, config: dict):
@@ -114,7 +122,7 @@ def cmd_info(args, config: dict):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Track used car listings from Cars.com, CarGurus, and AutoTempest"
+        description="Search used car listings via the MarketCheck API"
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
@@ -122,8 +130,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # scrape
-    sp_scrape = subparsers.add_parser("scrape", help="Fetch new listings from sources")
-    sp_scrape.add_argument("--source", choices=["cars_com", "cargurus", "autotempest"])
+    sp_scrape = subparsers.add_parser("scrape", help="Fetch new listings from MarketCheck")
     sp_scrape.add_argument("--zip", type=str)
     sp_scrape.add_argument("--radius", type=int)
     sp_scrape.add_argument("--max-price", type=int)
