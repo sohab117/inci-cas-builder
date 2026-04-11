@@ -16,7 +16,7 @@ from car_info import (
 )
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "car_tracker.db")
+DB_PATH = os.path.join(os.getcwd(), "car_tracker.db")
 
 app = Flask(__name__)
 
@@ -175,4 +175,6 @@ if __name__ == "__main__":
     print("  Phone:   http://<your-ip>:5000")
     print("  (Find your IP with: hostname -I or ipconfig)")
     print()
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

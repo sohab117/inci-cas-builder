@@ -17,7 +17,7 @@ from display import (
 )
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "car_tracker.db")
+DB_PATH = os.path.join(os.getcwd(), "car_tracker.db")
 
 
 def load_config(path: str = CONFIG_PATH) -> dict:
