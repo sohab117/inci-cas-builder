@@ -1,6 +1,18 @@
-__pycache__/
-*.pyc
-*.pyo
-*.db
+# Environment
 .env
-.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+
+# OS
+.DS_Store
+
+# Databases
+*.db
+
+# Output
+output/*
+!output/.gitkeep
