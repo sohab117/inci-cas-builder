@@ -212,26 +212,37 @@ These are flagged as future possibilities only. They are explicitly out of scope
 
 **Files processed:** 23 POs (20 in main folder + 3 in subfolder, excluding 1 blank template and 1 Proforma PDF).
 
-**Output artifacts (in Sohab's Google Drive root):**
-1. `MJOLNIR — PO Line Items (Raw Extract)` — 42 line items with PO Number, Date, Vendor, Item Description, Packaging Note, Qty, Unit, Unit Price, Total Price, Source File, Needs Review flag
-2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — 22 unique trade names with: best-guess INCI mapping, likely vendor, times ordered, last order date, typical unit price, action items
-3. `MJOLNIR — Raw Material Database` (folder) — both sheets above now live inside this folder (Sohab moved them in manually after initial creation left them in My Drive root)
+**Output artifacts:**
+1. `MJOLNIR — PO Line Items (Raw Extract)` — 42 line items with PO Number, Date, Vendor, Item Description, Packaging Note, Qty, Unit, Unit Price, Total Price, Source File, Needs Review flag (inside `MJOLNIR — Raw Material Database` folder)
+2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — 22 unique trade names with: best-guess INCI mapping, likely vendor, times ordered, last order date, typical unit price, action items (inside `MJOLNIR — Raw Material Database` folder)
+3. `MJOLNIR — Raw Material Database` (folder) — both PO sheets above live here (Sohab moved them in manually after initial creation left them in My Drive root)
+4. `MJOLNIR — Vendors` — vendor → primary contact → other contacts → phone → address → materials supplied → notes (added 2026-05-09 from Gmail thread search; currently in My Drive root, same Drive permissions issue — move into folder manually when convenient)
 
-**Action items requiring Sohab's verification before Supabase import:**
+**Action items resolved during 2026-05-09 Gmail pass (search of sohab@117holdings.com sent + inbox):**
 
-1. **Vendors missing on ~20 line items** — the PO template didn't always populate the Vendor field. Confirmed: Kraft Chemical (multi-line POs), Gattefosse Corporation, Barnet Products, Carrubba Inc. Unconfirmed (Claude guessed "Hallstar/Seppic" but needs verification): Montanov 202, Montanov 82, Montanov 68 MB, Sepimax Zen, DUB 810C, Pelemol 9512.
+1. **Vendors on the previously-UNKNOWN line items — RESOLVED.** Confirmations:
+   - Kraft Chemical (multi-line POs) — primary: Vlad Malevany / Lisa Gilman / Rick (pricing). 708-345-5200, Lake Zurich IL.
+   - Phoenix Chemical, Inc. — primary: Filomena De Vita (customerservice@phoenix-chem.com), 908-707-0232. Supplies **Pelemol 9512** (was UNKNOWN).
+   - Seppic / Air Liquide — primary: Myra Conde (myra.conde@airliquide.com). Supplies **Montanov 202, 82, 68 MB, Sepimax Zen, DUB 810C** (was guessed "Hallstar/Seppic"; confirmed Seppic specifically).
+   - Croda Inc. — primary: Tina Alley (Tina.Alley@croda.com). Supplies **SILVERFREE MBAL** (was UNKNOWN). Account setup completed 2025-07.
+   - Belle Aire Creations — primary: Daniela Alvarez (DAlvarez@belleairecreations.com), 708-307-4146. Supplies **Aura Bloom Mod 1 #315643** (was UNKNOWN — confirmed Belle Aire, not Givaudan).
+   - Gattefosse Corporation — primary: Ursula Puzio (UPuzio@gattefossecorp.com); IL rep Phil Leith. Supplies **Emulium Dolcea MB**.
+   - Barnet Products — primary: Stephanie Valerio / Tobi Scalf. Supplies **Barsil 2001**. (Chris Dotter is no longer at Barnet as of 2025-03.)
+   - Carrubba Inc. — primary: Grady Lawlor (gradyl@carrubba.com), 500 Pepper Street, Milford CT. Supplies **Coconut Water Fragrance N71537**.
+   - Lotioncrafter — used as occasional small-batch fallback for Sepimax Zen.
 
-2. **INCI breakdowns for blends need verification:**
-   - Kraftiphen Plus (preservative blend)
-   - Kraftguard Ultra (preservative blend)
-   - Emulium Dolcea MB (emulsifier blend)
-   - Cetearyl Alcohol/Ceteareth-20 EWAX
+**Action items still outstanding:**
+
+2. **INCI breakdowns for blends still need verification:**
+   - Kraftiphen Plus (preservative blend — Kraft Chemical)
+   - Kraftguard Ultra (preservative blend — Kraft Chemical)
+   - Emulium Dolcea MB (emulsifier blend — Gattefosse)
+   - Cetearyl Alcohol/Ceteareth-20 EWAX (Kraft Chemical)
 
 3. **High-cost / unique materials needing full SDS lookup:**
-   - SILVERFREE MBAL ($807/kg, INCI not confidently in Claude's training data)
-   - Aura Bloom Mod 1 #315643 (fragrance, vendor likely Belle Aire or Givaudan)
-   - DUB 810C (likely Caprylic/Capric Triglyceride but confirm)
-   - Barsil 2001 (silicone-based, INCI unclear)
+   - SILVERFREE MBAL ($807/kg — vendor confirmed Croda, INCI still needs SDS)
+   - DUB 810C (likely Caprylic/Capric Triglyceride per Will@noviconnect 2024 intro, but confirm with Seppic)
+   - Barsil 2001 (silicone-based, Barnet Products, INCI unclear)
 
 4. **Pricing intel preserved** — Pelemol 9512 ordered 7 times at consistent $18.87/lb (stable). Other materials show no significant price drift across orders.
 
