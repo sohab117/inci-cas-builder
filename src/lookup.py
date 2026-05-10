@@ -63,7 +63,12 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
     cosing_key, cosing_hit = _cosing_with_slash_retry(parsed_entry, normalized)
     if cosing_hit is not None:
         result = {**cosing_hit, "verified": True, "source": "cosing"}
-        _cache_put(cosing_key, result)
+        # Cache under the canonical key always; also under the slash-rejoined
+        # key when that's how we matched, so subsequent lookups by either form
+        # short-circuit to cache instead of re-running the retry.
+        _cache_put(normalized, result)
+        if cosing_key != normalized:
+            _cache_put(cosing_key, result)
         out.update(result)
         return out
 
@@ -106,8 +111,9 @@ def _cosing_with_slash_retry(
 ) -> tuple[str, dict | None]:
     """Try canonical key first; if `slash_synonyms` flagged, retry rejoined form.
 
-    Returns (key_used, cosing_row_or_None). The key is used for cache writes so
-    a slash-rejoined hit caches under the rejoined form.
+    Returns (key_used, cosing_row_or_None). `key_used` is the rejoined form when
+    that's how we matched, so the caller can write a second cache entry under
+    the rejoined key in addition to the canonical one.
     """
     direct = _cosing_lookup(normalized)
     if direct is not None:
@@ -296,3 +302,18 @@ def _cache_put(key: str, result: dict) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+if os.environ.get("LOOKUP_DEBUG") == "1":
+    import random as _random
+
+    _idx = _get_cosing_index()
+    _src = COSING_PATH if COSING_PATH.exists() else COSING_STUB_PATH
+    print(f"[lookup] CosIng loaded: {len(_idx)} rows from {_src}")
+    if _idx:
+        for _name, _row in _random.sample(list(_idx.items()), min(5, len(_idx))):
+            print(
+                f"  {_name!r} -> CAS={_row['cas_number']!r} "
+                f"EINECS={_row['einecs_number']!r} "
+                f"Function={_row['function']!r}"
+            )

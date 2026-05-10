@@ -148,6 +148,31 @@ def test_slash_synonym_retry_hits_compound_inci_name(mocker):
     anthropic_mock.assert_not_called()
 
 
+def test_slash_synonym_second_lookup_hits_cache(mocker):
+    """Regression: slash-rejoined hits must cache under canonical key too,
+    so the second call short-circuits without re-running CosIng."""
+    spy = mocker.spy(lookup_mod, "_cosing_lookup")
+    entry = _entry(
+        "Caprylic",
+        normalized="CAPRYLIC",
+        synonyms=["Capric Triglyceride"],
+        notes=["slash_synonyms"],
+    )
+
+    first = lookup_ingredient(entry)
+    assert first["source"] == "cosing"
+    assert first["cas_number"] == "73398-61-5"
+    calls_after_first = spy.call_count
+    assert calls_after_first >= 1, "CosIng should have been queried on first call"
+
+    second = lookup_ingredient(entry)
+    assert second["source"] == "cosing"
+    assert second["cas_number"] == "73398-61-5"
+    assert spy.call_count == calls_after_first, (
+        "CosIng was re-queried on second call; cache should have short-circuited"
+    )
+
+
 def test_lookup_panel_resolves_full_list(mocker):
     pubchem_mock = mocker.patch("src.lookup.requests.get")
     entries = [
