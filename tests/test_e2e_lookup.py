@@ -1,8 +1,10 @@
 """End-to-end smoke test: parse + lookup on a real product panel.
 
 Uses the real CosIng CSV at data/cosing.csv when present (falls back to the
-6-row stub otherwise). External fallbacks (PubChem, LLM) are mocked off so
-the test runs hermetically — only CosIng coverage is being measured.
+6-row stub otherwise). PubChem is hit for real so the CosIng-partial ->
+PubChem fallthrough path is exercised on actual data; LLM is disabled
+(no API key in fixture) to keep the smoke test cheap and offline-from-
+Anthropic. The test will need network for the PubChem leg.
 
 Run with `pytest -s tests/test_e2e_lookup.py` to see the full result table.
 """
@@ -31,10 +33,10 @@ def isolated_cache(tmp_path, monkeypatch):
     yield
 
 
-def test_vitasana_panel_all_found_in_cosing(mocker, capsys):
-    pubchem_404 = mocker.MagicMock(status_code=404)
-    mocker.patch("src.lookup.requests.get", return_value=pubchem_404)
-
+def test_vitasana_panel_all_found_in_cosing(capsys):
+    # No mocks: CosIng hits short-circuit before any external call; only the
+    # cosing_partial fallthrough (Sodium Lauroyl Methyl Isethionate) actually
+    # hits PubChem.
     parsed = parse_inci(VITASANA_PANEL)
     results = lookup_panel(parsed)
 

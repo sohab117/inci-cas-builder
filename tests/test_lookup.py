@@ -41,11 +41,12 @@ def test_cosing_hit_returns_water_data():
     assert result["position"] == 1
 
 
-def test_cosing_entry_with_empty_cas_is_partial(mocker):
-    """CosIng has the entry but its CAS field is empty -> source='cosing_partial'.
-    The chain stops here (does not fall through to PubChem/LLM)."""
-    pubchem_mock = mocker.patch("src.lookup.requests.get")
-    anthropic_mock = mocker.patch("src.lookup.Anthropic")
+def test_cosing_entry_with_empty_cas_is_partial(mocker, monkeypatch):
+    """CosIng partial + PubChem 404 + LLM unavailable -> source='cosing_partial'.
+    Verification note still explains the CosIng gap."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    pubchem_404 = mocker.MagicMock(status_code=404)
+    mocker.patch("src.lookup.requests.get", return_value=pubchem_404)
 
     result = lookup_ingredient(_entry("Sodium Lauroyl Methyl Isethionate"))
 
@@ -56,8 +57,62 @@ def test_cosing_entry_with_empty_cas_is_partial(mocker):
     assert result["function"] == "Cleansing"
     assert result["verification_note"] is not None
     assert "CosIng" in result["verification_note"]
-    pubchem_mock.assert_not_called()
+
+
+def test_cosing_partial_fills_cas_via_pubchem(mocker):
+    """CosIng partial + PubChem hit -> source='pubchem', verified=True,
+    CosIng function/EINECS preserved, note explains the gap."""
+    pubchem_resp = mocker.MagicMock(status_code=200)
+    pubchem_resp.json.return_value = {
+        "InformationList": {
+            "Information": [{"Synonym": ["Some Trade Name", "65104-92-3"]}]
+        }
+    }
+    mocker.patch("src.lookup.requests.get", return_value=pubchem_resp)
+    anthropic_mock = mocker.patch("src.lookup.Anthropic")
+
+    result = lookup_ingredient(_entry("Sodium Lauroyl Methyl Isethionate"))
+
+    assert result["source"] == "pubchem"
+    assert result["verified"] is True
+    assert result["cas_number"] == "65104-92-3"
+    # CosIng metadata preserved (function from CosIng, EINECS empty in stub -> None)
+    assert result["function"] == "Cleansing"
+    assert result["einecs_number"] is None
+    assert result["verification_note"] is not None
+    assert "PubChem" in result["verification_note"]
+    assert "CosIng" in result["verification_note"]
     anthropic_mock.assert_not_called()
+
+
+def test_cosing_partial_falls_through_to_llm_when_pubchem_misses(mocker, monkeypatch):
+    """CosIng partial + PubChem 404 + LLM hit -> source='llm', verified=False,
+    CosIng function preserved, note explains both gaps."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    pubchem_404 = mocker.MagicMock(status_code=404)
+    mocker.patch("src.lookup.requests.get", return_value=pubchem_404)
+
+    text_block = mocker.MagicMock(type="text")
+    text_block.text = (
+        '{"cas_number": "12345-67-8", '
+        '"einecs_number": null, '
+        '"function": "Surfactant"}'
+    )
+    fake_message = mocker.MagicMock(content=[text_block])
+    fake_client = mocker.MagicMock()
+    fake_client.messages.create.return_value = fake_message
+    mocker.patch("src.lookup.Anthropic", return_value=fake_client)
+
+    result = lookup_ingredient(_entry("Sodium Lauroyl Methyl Isethionate"))
+
+    assert result["source"] == "llm"
+    assert result["verified"] is False
+    assert result["cas_number"] == "12345-67-8"
+    # CosIng's "Cleansing" wins over LLM's "Surfactant"
+    assert result["function"] == "Cleansing"
+    assert result["verification_note"] is not None
+    assert "LLM" in result["verification_note"]
 
 
 def test_cosing_full_hit_has_no_verification_note():

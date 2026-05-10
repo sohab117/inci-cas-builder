@@ -10,6 +10,12 @@ authoritative source (CosIng/PubChem) AND a non-empty cas_number. CosIng
 entries with empty CAS get source='cosing_partial' and a verification_note,
 so the .docx output flags them for manual review instead of showing false
 confidence.
+
+Phase 1.2.7: when CosIng has an entry but no CAS (the partial case), the
+chain falls through to PubChem and then LLM in pursuit of a CAS. CosIng's
+function and EINECS are preserved across fallthroughs (CosIng remains
+authoritative for those fields even when its CAS is missing). The
+verification_note records the path taken so the .docx surfaces the gap.
 """
 
 from __future__ import annotations
@@ -47,6 +53,10 @@ _cosing_cache: dict[str, dict] | None = None
 
 
 PARTIAL_NOTE = "CosIng entry exists but CAS field is empty in source data"
+PUBCHEM_FILL_NOTE = (
+    "CAS resolved via PubChem; CosIng entry exists but its CAS field is empty"
+)
+LLM_FILL_NOTE = "CAS LLM-inferred; not in CosIng or PubChem"
 
 
 def lookup_ingredient(parsed_entry: dict) -> dict:
@@ -56,7 +66,12 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
         cas_number, einecs_number, function: str | None
         verified: bool — True only when source is authoritative AND cas_number set
         source: 'cosing' | 'cosing_partial' | 'pubchem' | 'llm' | 'not_found'
-        verification_note: str | None — explains verified=False for cosing_partial
+        verification_note: str | None — explains the source path when CosIng was
+            partial and a fallback filled in (or when nothing did)
+
+    A CosIng partial hit (entry present, CAS empty) does NOT short-circuit the
+    chain — PubChem and LLM are still tried for a CAS. CosIng's function and
+    EINECS are preserved if either fills the CAS.
     """
     out = dict(parsed_entry)
     out.update(
@@ -78,59 +93,97 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
         return out
 
     cosing_key, cosing_hit = _cosing_with_slash_retry(parsed_entry, normalized)
-    if cosing_hit is not None:
-        if cosing_hit.get("cas_number"):
+
+    # Full CosIng hit: short-circuit.
+    if cosing_hit is not None and cosing_hit.get("cas_number"):
+        result = {
+            **cosing_hit,
+            "verified": True,
+            "source": "cosing",
+            "verification_note": None,
+        }
+        _cache_result(normalized, cosing_key, result)
+        out.update(result)
+        return out
+
+    # At this point cosing_hit is None (no CosIng entry) or partial (entry
+    # exists but CAS is empty). In both cases we try PubChem next; the only
+    # difference is whether we preserve CosIng's function/EINECS on success.
+    inci_name = parsed_entry.get("inci_name", "")
+    pubchem_cas = _pubchem_lookup(inci_name)
+    if pubchem_cas is not None:
+        if cosing_hit is not None:
             result = {
-                **cosing_hit,
+                "cas_number": pubchem_cas,
+                "einecs_number": cosing_hit.get("einecs_number"),
+                "function": cosing_hit.get("function"),
                 "verified": True,
-                "source": "cosing",
-                "verification_note": None,
+                "source": "pubchem",
+                "verification_note": PUBCHEM_FILL_NOTE,
             }
         else:
             result = {
-                **cosing_hit,
-                "verified": False,
-                "source": "cosing_partial",
-                "verification_note": PARTIAL_NOTE,
+                "cas_number": pubchem_cas,
+                "einecs_number": None,
+                "function": None,
+                "verified": True,
+                "source": "pubchem",
+                "verification_note": None,
             }
-        # Cache under the canonical key always; also under the slash-rejoined
-        # key when that's how we matched, so subsequent lookups by either form
-        # short-circuit to cache instead of re-running the retry.
-        _cache_put(normalized, result)
-        if cosing_key != normalized:
-            _cache_put(cosing_key, result)
+        _cache_result(normalized, cosing_key, result)
         out.update(result)
         return out
 
-    pubchem_cas = _pubchem_lookup(parsed_entry.get("inci_name", ""))
-    if pubchem_cas is not None:
-        result = {
-            "cas_number": pubchem_cas,
-            "einecs_number": None,
-            "function": None,
-            "verified": True,
-            "source": "pubchem",
-            "verification_note": None,
-        }
-        _cache_put(normalized, result)
-        out.update(result)
-        return out
-
-    llm_data = _llm_lookup(parsed_entry.get("inci_name", ""))
+    llm_data = _llm_lookup(inci_name)
     if llm_data is not None:
+        if cosing_hit is not None:
+            result = {
+                "cas_number": llm_data.get("cas_number"),
+                "einecs_number": (
+                    cosing_hit.get("einecs_number") or llm_data.get("einecs_number")
+                ),
+                "function": (
+                    cosing_hit.get("function") or llm_data.get("function")
+                ),
+                "verified": False,
+                "source": "llm",
+                "verification_note": LLM_FILL_NOTE,
+            }
+        else:
+            result = {
+                "cas_number": llm_data.get("cas_number"),
+                "einecs_number": llm_data.get("einecs_number"),
+                "function": llm_data.get("function"),
+                "verified": False,
+                "source": "llm",
+                "verification_note": None,
+            }
+        _cache_result(normalized, cosing_key, result)
+        out.update(result)
+        return out
+
+    # Last resort: nothing produced a CAS. If CosIng at least had the entry,
+    # surface its function/EINECS with the partial diagnostic.
+    if cosing_hit is not None:
         result = {
-            "cas_number": llm_data.get("cas_number"),
-            "einecs_number": llm_data.get("einecs_number"),
-            "function": llm_data.get("function"),
+            **cosing_hit,
             "verified": False,
-            "source": "llm",
-            "verification_note": None,
+            "source": "cosing_partial",
+            "verification_note": PARTIAL_NOTE,
         }
-        _cache_put(normalized, result)
+        _cache_result(normalized, cosing_key, result)
         out.update(result)
         return out
 
     return out
+
+
+def _cache_result(normalized: str, cosing_key: str, result: dict) -> None:
+    """Cache under the canonical key, plus the rejoined CosIng key when
+    that's how we matched, so future lookups by either form short-circuit."""
+    _cache_put(normalized, result)
+    if cosing_key != normalized:
+        _cache_put(cosing_key, result)
 
 
 def lookup_panel(parsed_entries: list[dict]) -> list[dict]:
