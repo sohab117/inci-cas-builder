@@ -218,7 +218,8 @@ These are flagged as future possibilities only. They are explicitly out of scope
 2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — original v1, 22 unique trade names with best-guess INCI mapping and many "UNKNOWN — confirm" vendor entries (inside the folder; superseded by v2)
 3. `MJOLNIR — Raw Material Database` (folder) — PO sheets live here (Sohab moved them in manually after initial creation left them in My Drive root)
 4. `MJOLNIR — Vendors` — vendor → primary contact → other contacts → phone → address → materials supplied → notes (added 2026-05-09 from Gmail thread search; currently in My Drive root, same Drive permissions issue — move into folder manually when convenient)
-5. `MJOLNIR — Raw Materials Master List v2 (Vendor-Resolved)` — v1 with confirmed Vendor column (no more UNKNOWNs) and a new Primary Contact Email column. Should replace v1 once verified. Currently in My Drive root.
+5. `MJOLNIR — Raw Materials Master List v2 (Vendor-Resolved)` — v1 with confirmed Vendor column (no more UNKNOWNs) and a new Primary Contact Email column. Currently in My Drive root.
+6. `MJOLNIR — Raw Materials Master List v3 (INCI-Verified)` — v2 with INCI corrected against UL Prospector / Knowde / Seppic / Croda / Gattefossé / Barnet sources, plus an `INCI Verification Source` column. **This is the current authoritative master list.** Currently in My Drive root.
 
 **Action items resolved during 2026-05-09 Gmail pass (search of sohab@117holdings.com sent + inbox):**
 
@@ -233,18 +234,21 @@ These are flagged as future possibilities only. They are explicitly out of scope
    - Carrubba Inc. — primary: Grady Lawlor (gradyl@carrubba.com), 500 Pepper Street, Milford CT. Supplies **Coconut Water Fragrance N71537**.
    - Lotioncrafter — used as occasional small-batch fallback for Sepimax Zen.
 
-**Action items still outstanding:**
+**Action items resolved during 2026-05-09 INCI verification pass (UL Prospector / Knowde / Seppic / Croda / Gattefossé / Barnet direct):**
 
-2. **INCI breakdowns for blends still need verification:**
-   - Kraftiphen Plus (preservative blend — Kraft Chemical)
-   - Kraftguard Ultra (preservative blend — Kraft Chemical)
-   - Emulium Dolcea MB (emulsifier blend — Gattefosse)
-   - Cetearyl Alcohol/Ceteareth-20 EWAX (Kraft Chemical)
+2. **INCI breakdowns — RESOLVED with significant corrections.** v3 sheet captures all of the below:
+   - Montanov 202 — was wrongly listed as Cetearyl Alcohol/Cetearyl Glucoside; **actual INCI: Arachidyl Alcohol (and) Behenyl Alcohol (and) Arachidyl Glucoside**
+   - DUB 810C — was wrongly listed as Caprylic/Capric Triglyceride (that's MCT Oil); **actual INCI: Coco-Caprylate/Caprate**; manufacturer is Stéarinerie Dubois (Seppic distributes)
+   - Pelemol 9512 — was wrongly listed as PPG-3 Benzyl Ether Myristate; **actual INCI: Isoamyl Laurate** (100% vegetable, silicone alternative)
+   - Emulium Dolcea MB — was 3-component guess; **actual is 7-component: Cetearyl Alcohol (and) Glyceryl Stearate (and) Jojoba Esters (and) Helianthus Annuus (Sunflower) Seed Wax (and) Sodium Stearoyl Glutamate (and) Water (Aqua) (and) Polyglycerin-3**
+   - Barsil 2001 — RESOLVED from UNKNOWN; **actual INCI: Dimethicone** (mixed MW polymer system)
+   - SILVERFREE MBAL — RESOLVED from UNKNOWN; **active is Palmitoyl Dipeptide-52** (Pal-Pro-Pro lipopeptide at 6000 ppm; full product INCI may include glycerin/water carrier — still worth confirming via Croda SDS)
+   - Kraftiphen Plus — was wrongly guessed as Phenoxyethanol/Caprylyl Glycol/Ethylhexylglycerin; **likely Phenoxyethanol (and) Caprylyl Glycol (and) Sorbic Acid** (Kraft house-brand of Optiphen Plus); confirm via tech sheet
+   - Kraftguard Ultra — RESOLVED from UNKNOWN; **likely Gluconolactone (and) Sodium Benzoate** (Kraft house-brand of Geogard Ultra); confirm via tech sheet
 
-3. **High-cost / unique materials needing full SDS lookup:**
-   - SILVERFREE MBAL ($807/kg — vendor confirmed Croda, INCI still needs SDS)
-   - DUB 810C (likely Caprylic/Capric Triglyceride per Will@noviconnect 2024 intro, but confirm with Seppic)
-   - Barsil 2001 (silicone-based, Barnet Products, INCI unclear)
+3. **Still outstanding (small):**
+   - Confirm Kraftiphen Plus / Kraftguard Ultra INCI exactly matches Optiphen Plus / Geogard Ultra (high confidence but unconfirmed via Kraft tech sheet)
+   - Confirm full SILVERFREE MBAL product INCI including carrier (active confirmed; carrier system inferred)
 
 4. **Pricing intel preserved** — Pelemol 9512 ordered 7 times at consistent $18.87/lb (stable). Other materials show no significant price drift across orders.
 
