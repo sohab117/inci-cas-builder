@@ -173,6 +173,7 @@ These are flagged as future possibilities only. They are explicitly out of scope
 - Batch records / production tracking
 - Custom domain (`mjolnir.formula117.com` instead of `*.vercel.app`)
 - Supabase substance-endpoint fallback for surfactant mixtures (PubChem coverage gap discovered in Phase 1.2.7)
+- **Add a Google Sheets API MCP** so future sessions can edit cells in existing sheets (current Drive MCP is read + create-new only — `spreadsheets.values.update` / `batchUpdate` are not exposed). Discovered while updating the Master List with vendor data on 2026-05-09; had to ship a v2 sheet rather than edit v1 in place.
 
 ## Key Decisions Log
 
@@ -214,9 +215,10 @@ These are flagged as future possibilities only. They are explicitly out of scope
 
 **Output artifacts:**
 1. `MJOLNIR — PO Line Items (Raw Extract)` — 42 line items with PO Number, Date, Vendor, Item Description, Packaging Note, Qty, Unit, Unit Price, Total Price, Source File, Needs Review flag (inside `MJOLNIR — Raw Material Database` folder)
-2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — 22 unique trade names with: best-guess INCI mapping, likely vendor, times ordered, last order date, typical unit price, action items (inside `MJOLNIR — Raw Material Database` folder)
-3. `MJOLNIR — Raw Material Database` (folder) — both PO sheets above live here (Sohab moved them in manually after initial creation left them in My Drive root)
+2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — original v1, 22 unique trade names with best-guess INCI mapping and many "UNKNOWN — confirm" vendor entries (inside the folder; superseded by v2)
+3. `MJOLNIR — Raw Material Database` (folder) — PO sheets live here (Sohab moved them in manually after initial creation left them in My Drive root)
 4. `MJOLNIR — Vendors` — vendor → primary contact → other contacts → phone → address → materials supplied → notes (added 2026-05-09 from Gmail thread search; currently in My Drive root, same Drive permissions issue — move into folder manually when convenient)
+5. `MJOLNIR — Raw Materials Master List v2 (Vendor-Resolved)` — v1 with confirmed Vendor column (no more UNKNOWNs) and a new Primary Contact Email column. Should replace v1 once verified. Currently in My Drive root.
 
 **Action items resolved during 2026-05-09 Gmail pass (search of sohab@117holdings.com sent + inbox):**
 
