@@ -19,3 +19,4 @@ venv/
 # Output
 output/*
 !output/.gitkeep
+.claude/
