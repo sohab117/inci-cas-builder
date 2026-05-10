@@ -19,7 +19,7 @@ VITASANA_PANEL = (
     "Caprylyl Glycol, Ethylhexylglycerin"
 )
 
-MIN_COSING_COVERAGE = 0.5
+COSING_SOURCES = ("cosing", "cosing_partial")
 
 
 @pytest.fixture(autouse=True)
@@ -31,40 +31,40 @@ def isolated_cache(tmp_path, monkeypatch):
     yield
 
 
-def test_vitasana_panel_at_least_half_resolved_by_cosing(mocker, capsys):
+def test_vitasana_panel_all_found_in_cosing(mocker, capsys):
     pubchem_404 = mocker.MagicMock(status_code=404)
     mocker.patch("src.lookup.requests.get", return_value=pubchem_404)
 
     parsed = parse_inci(VITASANA_PANEL)
     results = lookup_panel(parsed)
 
-    cosing_verified = sum(
-        1
-        for r in results
-        if r.get("source") == "cosing" and r.get("verified") is True
-    )
+    in_cosing = [r for r in results if r.get("source") in COSING_SOURCES]
+    fully_verified = [r for r in results if r.get("verified") is True]
+    partials = [r for r in results if r.get("source") == "cosing_partial"]
     total = len(results)
 
     print("\n--- Vitasana panel results ---")
     print(
         f"{'#':<3} {'INCI Name':<42} {'CAS':<15} "
-        f"{'EINECS':<25} {'Source':<10} {'Verified'}"
+        f"{'EINECS':<25} {'Source':<16} {'Verified'}"
     )
-    print("-" * 110)
+    print("-" * 116)
     for r in results:
         print(
             f"{r['position']:<3} "
             f"{r['inci_name']:<42} "
             f"{(r.get('cas_number') or '-'):<15} "
             f"{(r.get('einecs_number') or '-'):<25} "
-            f"{r['source']:<10} "
+            f"{r['source']:<16} "
             f"{r['verified']}"
         )
-    pct = 100 * cosing_verified // total if total else 0
-    print(f"\nCosIng-verified: {cosing_verified}/{total} ({pct}%)")
+    print(f"\nIn CosIng: {len(in_cosing)}/{total}")
+    print(f"Fully verified (CAS present): {len(fully_verified)}/{total}")
+    print(f"Partial (CosIng entry, CAS missing): {len(partials)}/{total}")
+    for r in partials:
+        print(f"  - {r['inci_name']}: {r.get('verification_note')}")
 
-    assert cosing_verified / total >= MIN_COSING_COVERAGE, (
-        f"Only {cosing_verified}/{total} ingredients resolved from CosIng — "
-        f"weak coverage for this panel ({pct}% < "
-        f"{int(MIN_COSING_COVERAGE * 100)}% threshold)"
+    assert len(in_cosing) == total, (
+        f"Only {len(in_cosing)}/{total} ingredients found in CosIng "
+        "(full or partial)"
     )

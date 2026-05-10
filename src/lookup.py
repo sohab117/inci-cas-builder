@@ -4,6 +4,12 @@ Phase 1.2: resolves a parsed INCI entry to CAS + EINECS + function via a
 priority chain — local CosIng CSV → PubChem REST → Claude LLM. SQLite cache
 sits in front of the chain; not_found results are not cached so subsequent
 runs can retry as data sources improve.
+
+Phase 1.2.6: refined `verified` semantic. `verified=True` requires both an
+authoritative source (CosIng/PubChem) AND a non-empty cas_number. CosIng
+entries with empty CAS get source='cosing_partial' and a verification_note,
+so the .docx output flags them for manual review instead of showing false
+confidence.
 """
 
 from __future__ import annotations
@@ -40,8 +46,18 @@ _CAS_PATTERN = re.compile(r"^\d{2,7}-\d{2}-\d$")
 _cosing_cache: dict[str, dict] | None = None
 
 
+PARTIAL_NOTE = "CosIng entry exists but CAS field is empty in source data"
+
+
 def lookup_ingredient(parsed_entry: dict) -> dict:
-    """Resolve one parsed INCI entry to a fully populated ingredient record."""
+    """Resolve one parsed INCI entry to a fully populated ingredient record.
+
+    Output dict contains parser keys plus:
+        cas_number, einecs_number, function: str | None
+        verified: bool — True only when source is authoritative AND cas_number set
+        source: 'cosing' | 'cosing_partial' | 'pubchem' | 'llm' | 'not_found'
+        verification_note: str | None — explains verified=False for cosing_partial
+    """
     out = dict(parsed_entry)
     out.update(
         cas_number=None,
@@ -49,6 +65,7 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
         function=None,
         verified=False,
         source="not_found",
+        verification_note=None,
     )
 
     normalized = (parsed_entry.get("inci_normalized") or "").strip().upper()
@@ -62,7 +79,20 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
 
     cosing_key, cosing_hit = _cosing_with_slash_retry(parsed_entry, normalized)
     if cosing_hit is not None:
-        result = {**cosing_hit, "verified": True, "source": "cosing"}
+        if cosing_hit.get("cas_number"):
+            result = {
+                **cosing_hit,
+                "verified": True,
+                "source": "cosing",
+                "verification_note": None,
+            }
+        else:
+            result = {
+                **cosing_hit,
+                "verified": False,
+                "source": "cosing_partial",
+                "verification_note": PARTIAL_NOTE,
+            }
         # Cache under the canonical key always; also under the slash-rejoined
         # key when that's how we matched, so subsequent lookups by either form
         # short-circuit to cache instead of re-running the retry.
@@ -80,6 +110,7 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
             "function": None,
             "verified": True,
             "source": "pubchem",
+            "verification_note": None,
         }
         _cache_put(normalized, result)
         out.update(result)
@@ -93,6 +124,7 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
             "function": llm_data.get("function"),
             "verified": False,
             "source": "llm",
+            "verification_note": None,
         }
         _cache_put(normalized, result)
         out.update(result)
@@ -255,10 +287,15 @@ def _cache_conn() -> sqlite3.Connection:
             function TEXT,
             verified INTEGER,
             source TEXT,
+            verification_note TEXT,
             cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
+    # Migrate older databases that were created before verification_note existed.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(cache)").fetchall()}
+    if "verification_note" not in cols:
+        conn.execute("ALTER TABLE cache ADD COLUMN verification_note TEXT")
     return conn
 
 
@@ -266,8 +303,8 @@ def _cache_get(key: str) -> dict | None:
     conn = _cache_conn()
     try:
         row = conn.execute(
-            "SELECT cas_number, einecs_number, function, verified, source "
-            "FROM cache WHERE inci_normalized = ?",
+            "SELECT cas_number, einecs_number, function, verified, source, "
+            "verification_note FROM cache WHERE inci_normalized = ?",
             (key,),
         ).fetchone()
     finally:
@@ -280,6 +317,7 @@ def _cache_get(key: str) -> dict | None:
         "function": row[2],
         "verified": bool(row[3]),
         "source": row[4],
+        "verification_note": row[5],
     }
 
 
@@ -288,8 +326,9 @@ def _cache_put(key: str, result: dict) -> None:
     try:
         conn.execute(
             "INSERT OR REPLACE INTO cache "
-            "(inci_normalized, cas_number, einecs_number, function, verified, source) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(inci_normalized, cas_number, einecs_number, function, verified, "
+            "source, verification_note) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 key,
                 result.get("cas_number"),
@@ -297,6 +336,7 @@ def _cache_put(key: str, result: dict) -> None:
                 result.get("function"),
                 int(bool(result.get("verified"))),
                 result.get("source"),
+                result.get("verification_note"),
             ),
         )
         conn.commit()

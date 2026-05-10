@@ -41,6 +41,33 @@ def test_cosing_hit_returns_water_data():
     assert result["position"] == 1
 
 
+def test_cosing_entry_with_empty_cas_is_partial(mocker):
+    """CosIng has the entry but its CAS field is empty -> source='cosing_partial'.
+    The chain stops here (does not fall through to PubChem/LLM)."""
+    pubchem_mock = mocker.patch("src.lookup.requests.get")
+    anthropic_mock = mocker.patch("src.lookup.Anthropic")
+
+    result = lookup_ingredient(_entry("Sodium Lauroyl Methyl Isethionate"))
+
+    assert result["source"] == "cosing_partial"
+    assert result["verified"] is False
+    assert result["cas_number"] is None
+    assert result["einecs_number"] is None
+    assert result["function"] == "Cleansing"
+    assert result["verification_note"] is not None
+    assert "CosIng" in result["verification_note"]
+    pubchem_mock.assert_not_called()
+    anthropic_mock.assert_not_called()
+
+
+def test_cosing_full_hit_has_no_verification_note():
+    """Sanity: a full CosIng hit (CAS present) carries verification_note=None."""
+    result = lookup_ingredient(_entry("Water"))
+    assert result["verified"] is True
+    assert result["source"] == "cosing"
+    assert result["verification_note"] is None
+
+
 def test_pubchem_fallback_when_cosing_misses(mocker):
     pubchem_resp = mocker.MagicMock(status_code=200)
     pubchem_resp.json.return_value = {
