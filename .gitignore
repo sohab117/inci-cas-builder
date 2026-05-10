@@ -20,3 +20,6 @@ venv/
 output/*
 !output/.gitkeep
 .claude/
+
+# SDS / vendor PDFs — may be confidential per vendor footers; re-downloadable from Gmail/Drive
+data/sds/
