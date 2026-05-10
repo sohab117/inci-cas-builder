@@ -56,4 +56,4 @@ def test_full_pipeline_renders_vitasana_panel(mocker, capsys):
     table = doc.tables[0]
     # 1 header row + 8 ingredient rows
     assert len(table.rows) == 9, f"expected 9 rows (1 header + 8 data), got {len(table.rows)}"
-    assert len(table.columns) == 7
+    assert len(table.columns) == 6

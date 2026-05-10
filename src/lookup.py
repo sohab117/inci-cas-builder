@@ -64,6 +64,8 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
 
     Output dict contains parser keys plus:
         cas_number, einecs_number, function: str | None
+        function_full: str | None — alias of function preserving the original
+            CosIng list (the document layer simplifies for display)
         verified: bool — True only when source is authoritative AND cas_number set
         source: 'cosing' | 'cosing_partial' | 'pubchem' | 'llm' | 'not_found'
         verification_note: str | None — explains the source path when CosIng was
@@ -73,6 +75,14 @@ def lookup_ingredient(parsed_entry: dict) -> dict:
     chain — PubChem and LLM are still tried for a CAS. CosIng's function and
     EINECS are preserved if either fills the CAS.
     """
+    result = _resolve_chain(parsed_entry)
+    result["function_full"] = result.get("function")
+    return result
+
+
+def _resolve_chain(parsed_entry: dict) -> dict:
+    """Run the cache -> CosIng -> PubChem -> LLM chain and return the result dict
+    (without the function_full alias — that's added by lookup_ingredient)."""
     out = dict(parsed_entry)
     out.update(
         cas_number=None,

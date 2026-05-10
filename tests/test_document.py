@@ -1,9 +1,11 @@
 """Unit tests for src/document.py — .docx generation."""
 
+import pytest
 from docx import Document
+from docx.enum.section import WD_ORIENT
 from docx.oxml.ns import qn
 
-from src.document import generate_document
+from src.document import generate_document, simplify_function
 
 
 def _entry(
@@ -59,11 +61,10 @@ def test_generates_valid_docx_that_reopens(tmp_path):
 
     assert returned == str(out)
     assert out.exists() and out.stat().st_size > 0
-    # Reopens without raising
     Document(str(out))
 
 
-def test_table_has_7_columns_and_correct_row_count(tmp_path):
+def test_table_has_6_columns_and_correct_row_count(tmp_path):
     out = tmp_path / "out.docx"
     entries = [
         _entry(1, "Water", cas_number="7732-18-5", verified=True, source="cosing"),
@@ -75,9 +76,8 @@ def test_table_has_7_columns_and_correct_row_count(tmp_path):
     doc = Document(str(out))
     table = _find_data_table(doc)
 
-    assert len(table.columns) == 7
-    # 1 header row + 3 data rows
-    assert len(table.rows) == 4
+    assert len(table.columns) == 6
+    assert len(table.rows) == 4  # 1 header + 3 data
 
     header_texts = [c.text.strip() for c in table.rows[0].cells]
     expected = [
@@ -86,10 +86,31 @@ def test_table_has_7_columns_and_correct_row_count(tmp_path):
         "Common Name / Function",
         "CAS Number",
         "EINECS",
-        "Trade Name / Source",
         "Verified",
     ]
     assert header_texts == expected
+
+
+def test_table_has_no_trade_name_source_column(tmp_path):
+    out = tmp_path / "out.docx"
+    entries = [_entry(1, "Water", cas_number="7732-18-5", verified=True, source="cosing")]
+    generate_document(entries, str(out))
+    doc = Document(str(out))
+    table = _find_data_table(doc)
+    headers = [c.text.strip().lower() for c in table.rows[0].cells]
+    assert not any("trade name" in h for h in headers)
+
+
+def test_document_is_landscape_letter(tmp_path):
+    out = tmp_path / "out.docx"
+    entries = [_entry(1, "Water", cas_number="7732-18-5", verified=True, source="cosing")]
+    generate_document(entries, str(out))
+    doc = Document(str(out))
+    section = doc.sections[0]
+    assert section.orientation == WD_ORIENT.LANDSCAPE
+    assert section.page_width > section.page_height, (
+        f"page_width ({section.page_width}) must exceed page_height ({section.page_height})"
+    )
 
 
 def test_header_metadata_appears_in_document(tmp_path):
@@ -106,7 +127,6 @@ def test_header_metadata_appears_in_document(tmp_path):
     generate_document(entries, str(out), metadata)
     doc = Document(str(out))
 
-    # All metadata strings should appear somewhere in the body paragraphs
     body_text = "\n".join(p.text for p in doc.paragraphs)
     assert "Vitasana Body Wash" in body_text
     assert "Vitasana" in body_text
@@ -128,10 +148,7 @@ def test_unverified_rows_have_different_shading_than_verified_rows(tmp_path):
 
     verified_row_fill = _cell_fill(table.rows[1].cells[0])
     unverified_row_fill = _cell_fill(table.rows[2].cells[0])
-    assert verified_row_fill != unverified_row_fill, (
-        f"verified and unverified rows have same shading "
-        f"({verified_row_fill!r} == {unverified_row_fill!r})"
-    )
+    assert verified_row_fill != unverified_row_fill
 
 
 def test_verification_notes_render_as_footnotes(tmp_path):
@@ -152,14 +169,13 @@ def test_verification_notes_render_as_footnotes(tmp_path):
     doc = Document(str(out))
     table = _find_data_table(doc)
 
-    # Verified column on row 2 (index 2) should have a superscript reference run
-    verified_cell = table.rows[2].cells[6]
+    # Verified column is now the last column (index 5 with 6 columns)
+    verified_cell = table.rows[2].cells[-1]
     superscript_runs = [
         r for p in verified_cell.paragraphs for r in p.runs if r.font.superscript
     ]
     assert len(superscript_runs) >= 1, "no superscript footnote ref in unverified row"
 
-    # Body paragraphs after the table should contain the note text
     body_text = "\n".join(p.text for p in doc.paragraphs)
     assert "CosIng entry exists but CAS field is empty in source data" in body_text
 
@@ -183,14 +199,55 @@ def test_synonyms_render_as_italic_second_line_under_inci_name(tmp_path):
 
     inci_cell = table.rows[1].cells[1]
     paragraphs = inci_cell.paragraphs
-    assert len(paragraphs) >= 2, (
-        f"expected INCI cell with synonyms to have ≥2 paragraphs, got {len(paragraphs)}"
-    )
-    # First paragraph: canonical name
+    assert len(paragraphs) >= 2
     assert "Aqua" in paragraphs[0].text
-    # Second paragraph: synonyms in italic
     second_text = paragraphs[1].text
     assert "Water" in second_text and "Eau" in second_text
-    assert any(r.italic for r in paragraphs[1].runs), (
-        "synonyms line should be italic"
-    )
+    assert any(r.italic for r in paragraphs[1].runs)
+
+
+# ---------------------------------------------------------------------------
+# simplify_function rules
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "function_str, inci_name, expected",
+    [
+        # Surfactant sub-categorization based on INCI name keywords
+        ("Surfactant - Cleansing", "Cocamidopropyl Betaine", "Amphoteric Surfactant"),
+        (
+            "Surfactant - Cleansing",
+            "Sodium Lauroyl Methyl Isethionate",
+            "Anionic Surfactant",
+        ),
+        ("Surfactant - Cleansing", "Lauryl Glucoside", "Nonionic Surfactant"),
+        ("Cleansing, Surfactant - Foam Boosting", "Disodium Lauroamphodiacetate", "Anionic Surfactant"),
+        ("Surfactant - Emulsifying", "Mystery Compound", "Surfactant"),
+        # Preservative & related
+        ("Antimicrobial, Preservative", "", "Preservative"),
+        ("Preservative", "", "Preservative"),
+        ("Antimicrobial", "", "Preservative"),
+        # Solvent
+        ("Solvent", "", "Solvent"),
+        ("Antiplaque, Skin Conditioning, Solvent", "Water", "Solvent"),
+        # Skin Conditioning variants
+        (
+            "Deodorant, Hair Conditioning, Skin Conditioning, Skin Conditioning - Emollient",
+            "Caprylyl Glycol",
+            "Emollient",
+        ),
+        ("Skin Conditioning", "Aloe Barbadensis Leaf Juice", "Skin Conditioning"),
+        # Other categories
+        ("Humectant", "", "Humectant"),
+        ("Viscosity Controlling", "", "Viscosity Modifier"),
+        # Edge cases
+        (None, "", ""),
+        ("", "", ""),
+        # Fall-through to first item
+        ("Antistatic", "", "Antistatic"),
+        ("Antistatic, Hair Conditioning", "", "Antistatic"),
+    ],
+)
+def test_simplify_function_rules(function_str, inci_name, expected):
+    assert simplify_function(function_str, inci_name) == expected
