@@ -1,0 +1,166 @@
+from pathlib import Path
+
+import pytest
+
+import src.lookup as lookup_mod
+from src.lookup import lookup_ingredient, lookup_panel
+
+STUB_CSV_PATH = Path(__file__).resolve().parent.parent / "data" / "cosing_stub.csv"
+
+
+@pytest.fixture(autouse=True)
+def isolated_lookup_state(tmp_path, monkeypatch):
+    """Force tests to use the stub CSV and a per-test SQLite cache."""
+    monkeypatch.setattr(lookup_mod, "COSING_PATH", tmp_path / "no-real-cosing.csv")
+    monkeypatch.setattr(lookup_mod, "COSING_STUB_PATH", STUB_CSV_PATH)
+    monkeypatch.setattr(lookup_mod, "CACHE_PATH", tmp_path / "cache.db")
+    monkeypatch.setattr(lookup_mod, "_cosing_cache", None)
+    yield
+
+
+def _entry(inci_name: str, normalized: str = None, synonyms=None, notes=None) -> dict:
+    return {
+        "position": 1,
+        "inci_name": inci_name,
+        "inci_normalized": normalized if normalized is not None else inci_name.upper(),
+        "raw": inci_name,
+        "synonyms": synonyms or [],
+        "notes": notes or [],
+    }
+
+
+def test_cosing_hit_returns_water_data():
+    result = lookup_ingredient(_entry("Water"))
+    assert result["cas_number"] == "7732-18-5"
+    assert result["einecs_number"] == "231-791-2"
+    assert result["function"] == "Solvent"
+    assert result["verified"] is True
+    assert result["source"] == "cosing"
+    # Parser fields preserved
+    assert result["inci_name"] == "Water"
+    assert result["position"] == 1
+
+
+def test_pubchem_fallback_when_cosing_misses(mocker):
+    pubchem_resp = mocker.MagicMock(status_code=200)
+    pubchem_resp.json.return_value = {
+        "InformationList": {
+            "Information": [{"Synonym": ["Vitamin E", "alpha-Tocopherol", "59-02-9"]}]
+        }
+    }
+    mocker.patch("src.lookup.requests.get", return_value=pubchem_resp)
+    anthropic_mock = mocker.patch("src.lookup.Anthropic")
+
+    result = lookup_ingredient(_entry("Tocopherol"))
+    assert result["cas_number"] == "59-02-9"
+    assert result["einecs_number"] is None
+    assert result["function"] is None
+    assert result["verified"] is True
+    assert result["source"] == "pubchem"
+    anthropic_mock.assert_not_called()
+
+
+def test_llm_fallback_when_cosing_and_pubchem_miss(mocker, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    pubchem_resp = mocker.MagicMock(status_code=404)
+    mocker.patch("src.lookup.requests.get", return_value=pubchem_resp)
+
+    text_block = mocker.MagicMock(type="text")
+    text_block.text = (
+        '{"cas_number": "12345-67-8", '
+        '"einecs_number": "999-999-9", '
+        '"function": "Mystery Function"}'
+    )
+    fake_message = mocker.MagicMock(content=[text_block])
+    fake_client = mocker.MagicMock()
+    fake_client.messages.create.return_value = fake_message
+    mocker.patch("src.lookup.Anthropic", return_value=fake_client)
+
+    result = lookup_ingredient(_entry("Obscuram Esoterica"))
+    assert result["cas_number"] == "12345-67-8"
+    assert result["einecs_number"] == "999-999-9"
+    assert result["function"] == "Mystery Function"
+    assert result["verified"] is False
+    assert result["source"] == "llm"
+
+
+def test_not_found_when_all_sources_fail(mocker, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    pubchem_resp = mocker.MagicMock(status_code=404)
+    mocker.patch("src.lookup.requests.get", return_value=pubchem_resp)
+
+    text_block = mocker.MagicMock(type="text")
+    text_block.text = (
+        '{"cas_number": null, "einecs_number": null, "function": null}'
+    )
+    fake_message = mocker.MagicMock(content=[text_block])
+    fake_client = mocker.MagicMock()
+    fake_client.messages.create.return_value = fake_message
+    mocker.patch("src.lookup.Anthropic", return_value=fake_client)
+
+    result = lookup_ingredient(_entry("Completely Unknown Ingredient X"))
+    assert result["cas_number"] is None
+    assert result["einecs_number"] is None
+    assert result["function"] is None
+    assert result["verified"] is False
+    assert result["source"] == "not_found"
+
+
+def test_cache_hit_skips_external_calls(mocker):
+    """First call hits PubChem; second call must not."""
+    pubchem_resp = mocker.MagicMock(status_code=200)
+    pubchem_resp.json.return_value = {
+        "InformationList": {"Information": [{"Synonym": ["59-02-9"]}]}
+    }
+    pubchem_mock = mocker.patch("src.lookup.requests.get", return_value=pubchem_resp)
+
+    entry = _entry("Tocopherol")
+    first = lookup_ingredient(entry)
+    assert first["source"] == "pubchem"
+    assert first["cas_number"] == "59-02-9"
+    assert pubchem_mock.call_count == 1
+
+    second = lookup_ingredient(entry)
+    assert second["source"] == "pubchem"
+    assert second["cas_number"] == "59-02-9"
+    assert pubchem_mock.call_count == 1
+
+
+def test_slash_synonym_retry_hits_compound_inci_name(mocker):
+    """`Caprylic` + synonym `Capric Triglyceride` should rejoin to hit CosIng."""
+    pubchem_mock = mocker.patch("src.lookup.requests.get")
+    anthropic_mock = mocker.patch("src.lookup.Anthropic")
+
+    entry = _entry(
+        "Caprylic",
+        normalized="CAPRYLIC",
+        synonyms=["Capric Triglyceride"],
+        notes=["slash_synonyms"],
+    )
+    result = lookup_ingredient(entry)
+
+    assert result["source"] == "cosing"
+    assert result["cas_number"] == "73398-61-5"
+    assert result["function"] == "Emollient"
+    pubchem_mock.assert_not_called()
+    anthropic_mock.assert_not_called()
+
+
+def test_lookup_panel_resolves_full_list(mocker):
+    pubchem_mock = mocker.patch("src.lookup.requests.get")
+    entries = [
+        _entry("Water"),
+        _entry("Glycerin"),
+        _entry("Phenoxyethanol"),
+    ]
+    results = lookup_panel(entries)
+
+    assert [r["cas_number"] for r in results] == [
+        "7732-18-5",
+        "56-81-5",
+        "122-99-6",
+    ]
+    assert all(r["source"] == "cosing" for r in results)
+    pubchem_mock.assert_not_called()
