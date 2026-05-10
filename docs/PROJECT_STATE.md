@@ -213,14 +213,20 @@ These are flagged as future possibilities only. They are explicitly out of scope
 
 **Files processed:** 23 POs (20 in main folder + 3 in subfolder, excluding 1 blank template and 1 Proforma PDF).
 
-**Output artifacts:**
-1. `MJOLNIR — PO Line Items (Raw Extract)` — 42 line items with PO Number, Date, Vendor, Item Description, Packaging Note, Qty, Unit, Unit Price, Total Price, Source File, Needs Review flag (inside `MJOLNIR — Raw Material Database` folder)
-2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — original v1, 22 unique trade names with best-guess INCI mapping and many "UNKNOWN — confirm" vendor entries (inside the folder; superseded by v2)
-3. `MJOLNIR — Raw Material Database` (folder) — PO sheets live here (Sohab moved them in manually after initial creation left them in My Drive root)
-4. `MJOLNIR — Vendors` — vendor → primary contact → other contacts → phone → address → materials supplied → notes (added 2026-05-09 from Gmail thread search; currently in My Drive root, same Drive permissions issue — move into folder manually when convenient)
-5. `MJOLNIR — Raw Materials Master List v2 (Vendor-Resolved)` — v1 with confirmed Vendor column (no more UNKNOWNs) and a new Primary Contact Email column. Currently in My Drive root.
-6. `MJOLNIR — Raw Materials Master List v3 (INCI-Verified)` — v2 with INCI corrected against UL Prospector / Knowde / Seppic / Croda / Gattefossé / Barnet sources, plus an `INCI Verification Source` column. **This is the current authoritative master list.** Currently in My Drive root.
-7. `MJOLNIR — Prospective Vendors & Sample Partners` — vendors Sohab has talked to but not (yet) ordered from, plus sample-partner relationships, plus alternate contacts for active vendors. Built 2026-05-09 from a deeper Gmail pass. Includes Hallstar (active sample partner — Brad Pentzien, RGA-8 film former for "Wood" project), Essential Ingredients/Lubrizol (account team assigned but no PO yet), Stéarinerie Dubois (DUB 810C manufacturer; currently distributed via Seppic), Greenway Biotech (China; active sample evaluation of Sodium Azulene Sulfonate), and several cold-outreach prospects (Green Jeeva, Raphas, Luxon, Azelis, Omya). Currently in My Drive root.
+**Authoritative working copy (as of 2026-05-09): local CSVs in `data/`.** Drive sheets are now read-only mirrors for human review — when we add or correct info, we edit the CSVs and commit. The Drive copies will drift unless manually re-synced; that's intentional, and they'll be retired entirely once Phase 3.3 puts this data into Supabase. The CSV pattern matches how the engine already loads `data/cosing.csv`, so Phase 3.5 (raw-materials-first lookup) drops in cleanly later.
+
+**Local CSVs (authoritative):**
+1. **`data/raw_materials_master.csv`** — 22 trade names × 10 cols (Trade Name, Verified INCI Name, Vendor, Primary Contact Email, Times Ordered, Last Order Date, Typical Unit Price, Unit, INCI Verification Source, Notes). Mirror of Drive's "Master List v3".
+2. **`data/vendors.csv`** — 9 active vendors × 8 cols. Mirror of Drive's "Vendors" sheet.
+3. **`data/prospective_vendors.csv`** — 10 prospective vendors / sample partners × 10 cols. Mirror of Drive's "Prospective Vendors & Sample Partners".
+
+**Drive artifacts (read-only mirrors):**
+1. `MJOLNIR — PO Line Items (Raw Extract)` — 42 line items, lives in the MJOLNIR folder; **stays in Drive only** (not copied locally — large, infrequently changed)
+2. `MJOLNIR — Raw Material Database` (folder) — Drive parent for the sheets
+3. `MJOLNIR — Raw Materials Master List v3 (INCI-Verified)` — Drive copy (mirror of `data/raw_materials_master.csv`)
+4. `MJOLNIR — Vendors` — Drive copy (mirror of `data/vendors.csv`)
+5. `MJOLNIR — Prospective Vendors & Sample Partners` — Drive copy (mirror of `data/prospective_vendors.csv`)
+6. Older Drive versions (v1, v2): superseded; safe to archive once v3 mirror is verified
 
 **Action items resolved during 2026-05-09 Gmail pass (search of sohab@117holdings.com sent + inbox):**
 
