@@ -254,8 +254,9 @@ These are flagged as future possibilities only. They are explicitly out of scope
    - Kraftguard Ultra — RESOLVED from UNKNOWN; **likely Gluconolactone (and) Sodium Benzoate** (Kraft house-brand of Geogard Ultra); confirm via tech sheet
 
 3. **Still outstanding (small):**
-   - Confirm Kraftiphen Plus / Kraftguard Ultra INCI exactly matches Optiphen Plus / Geogard Ultra (high confidence but unconfirmed via Kraft tech sheet)
-   - Confirm full SILVERFREE MBAL product INCI including carrier (active confirmed; carrier system inferred)
+   - Confirm Kraftiphen Plus INCI exactly matches Optiphen Plus (Rick at Kraft confirmed Kraftiphen Plus = Optiphen Plus on 2025-11-25; tech-sheet confirmation still pending but rebrand is direct)
+   - Kraftguard Ultra: confirmed by Sohab as Geogard Ultra rebrand 2026-05-09 — RESOLVED
+   - SILVERFREE MBAL: confirmed via Croda SDS 2026-05-09 — INCI is Glycerin (and) Aqua (and) Palmitoyl Dipeptide-52. SDS Section 3 lists Glycerin 60-80% w/w (CAS 56-81-5); active is trade-secret in SDS but disclosed as Palmitoyl Dipeptide-52 at 0.6% in Croda Beauty Actives marketing literature. RESOLVED.
 
 4. **Pricing intel preserved** — Pelemol 9512 ordered 7 times at consistent $18.87/lb (stable). Other materials show no significant price drift across orders.
 
