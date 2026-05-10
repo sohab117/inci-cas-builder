@@ -215,7 +215,7 @@ These are flagged as future possibilities only. They are explicitly out of scope
 **Output artifacts (in Sohab's Google Drive root):**
 1. `MJOLNIR — PO Line Items (Raw Extract)` — 42 line items with PO Number, Date, Vendor, Item Description, Packaging Note, Qty, Unit, Unit Price, Total Price, Source File, Needs Review flag
 2. `MJOLNIR — Raw Materials Master List (Deduplicated)` — 22 unique trade names with: best-guess INCI mapping, likely vendor, times ordered, last order date, typical unit price, action items
-3. `MJOLNIR — Raw Material Database` (folder) — created but Drive permissions kept the sheets in My Drive root; manual move recommended
+3. `MJOLNIR — Raw Material Database` (folder) — both sheets above now live inside this folder (Sohab moved them in manually after initial creation left them in My Drive root)
 
 **Action items requiring Sohab's verification before Supabase import:**
 
