@@ -220,6 +220,7 @@ These are flagged as future possibilities only. They are explicitly out of scope
 4. `MJOLNIR — Vendors` — vendor → primary contact → other contacts → phone → address → materials supplied → notes (added 2026-05-09 from Gmail thread search; currently in My Drive root, same Drive permissions issue — move into folder manually when convenient)
 5. `MJOLNIR — Raw Materials Master List v2 (Vendor-Resolved)` — v1 with confirmed Vendor column (no more UNKNOWNs) and a new Primary Contact Email column. Currently in My Drive root.
 6. `MJOLNIR — Raw Materials Master List v3 (INCI-Verified)` — v2 with INCI corrected against UL Prospector / Knowde / Seppic / Croda / Gattefossé / Barnet sources, plus an `INCI Verification Source` column. **This is the current authoritative master list.** Currently in My Drive root.
+7. `MJOLNIR — Prospective Vendors & Sample Partners` — vendors Sohab has talked to but not (yet) ordered from, plus sample-partner relationships, plus alternate contacts for active vendors. Built 2026-05-09 from a deeper Gmail pass. Includes Hallstar (active sample partner — Brad Pentzien, RGA-8 film former for "Wood" project), Essential Ingredients/Lubrizol (account team assigned but no PO yet), Stéarinerie Dubois (DUB 810C manufacturer; currently distributed via Seppic), Greenway Biotech (China; active sample evaluation of Sodium Azulene Sulfonate), and several cold-outreach prospects (Green Jeeva, Raphas, Luxon, Azelis, Omya). Currently in My Drive root.
 
 **Action items resolved during 2026-05-09 Gmail pass (search of sohab@117holdings.com sent + inbox):**
 
@@ -251,6 +252,44 @@ These are flagged as future possibilities only. They are explicitly out of scope
    - Confirm full SILVERFREE MBAL product INCI including carrier (active confirmed; carrier system inferred)
 
 4. **Pricing intel preserved** — Pelemol 9512 ordered 7 times at consistent $18.87/lb (stable). Other materials show no significant price drift across orders.
+
+**Catalog / brochure references found in inbox (worth filing in Drive):**
+- **Barnet Products** — Chris Dotter sent literature on all ingredients on 2024-07-31 (PDF attachments in that thread)
+- **Hallstar** — Sytenol® A / Bakuchiol marketing materials (multiple emails from workwonders@hallstar.com and beautynews@hallstar.com); RGA series TDS shared by Brad Pentzien
+- **Belle Aire Creations** — Quote PDFs (PB263619, PB262955), Mood Boards for XP SKIN, regulatory docs for #315643 / #278370 / #318964 fragrances
+- **Carrubba** — Regulatory documents for Coconut Water N71537 (paraben/phthalate/formaldehyde-free package)
+- **Greenway Biotech** — Sample TDS for Sodium Azulene Sulfonate / Guaiazulene Sulfonate
+- **Croda** — Beauty website portal access (online catalog at croda.com)
+- **Phoenix Chemical** — Pelemol catalog accessible via phoenix-chem.com (no PDF in inbox)
+- **Stéarinerie Dubois** — DUB series TDS available on Knowde / SpecialChem / stearinerie-dubois.com
+- **Industry newsletters** (informational, not actionable for sourcing): SpecialChem, Cosmetics & Toiletries, Personal Care Magazine
+
+**Suggested Drive folder structure for catalogs (manual setup):**
+```
+MJOLNIR — Raw Material Database/
+├── 00 — Master Lists/
+│   ├── PO Line Items (Raw Extract)
+│   └── Raw Materials Master List v3 (INCI-Verified)  ← current
+├── 01 — Vendor Directory/
+│   ├── Vendors (Active)
+│   └── Prospective Vendors & Sample Partners
+├── 02 — Catalogs & Brochures/
+│   ├── Kraft Chemical/
+│   ├── Barnet Products/         (← Chris Dotter literature 2024-07-31)
+│   ├── Hallstar/                 (← Sytenol A, RGA series)
+│   ├── Seppic/
+│   ├── Phoenix Chemical/
+│   ├── Stearinerie Dubois/
+│   ├── Croda — Sederma/
+│   ├── Gattefosse/
+│   ├── Belle Aire Creations/    (← fragrance briefs, mood boards, reg docs)
+│   ├── Carrubba/                 (← N71537 regulatory package)
+│   ├── Essential Ingredients/
+│   └── Greenway Biotech/         (← Sodium Azulene Sulfonate TDS)
+└── 99 — Archive (superseded versions)/
+    ├── Master List v1
+    └── Master List v2 (vendor-resolved, INCI not yet verified)
+```
 
 ## Critical Reminders for Future Sessions
 
