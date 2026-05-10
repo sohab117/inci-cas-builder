@@ -26,6 +26,16 @@ Build in strict phases. Do not skip ahead. Do not scaffold for future phases.
 - Never assume an ingredient's CAS number from training data alone — always check local data sources first, mark unverified if falling back to LLM.
 - Stop and confirm with the user before moving between phases.
 
+## Git Workflow
+
+This is a solo project. Skip the PR ceremony.
+
+- Work directly on `main` for all phases. Do NOT create feature branches unless I explicitly ask for one.
+- After tests pass and the commit is made, push directly to `origin/main`.
+- Do NOT open pull requests.
+- Always run the full test suite (`.venv/bin/python -m pytest -v`) before pushing. If tests fail, fix them or stop and report — never push red tests.
+- When adding any new Python dependency to source code or test files, you MUST also update `pyproject.toml` in the same commit. Imports without matching `pyproject.toml` entries break fresh clones. This applies to both runtime deps and dev deps (e.g. `pytest-mock` for the `mocker` fixture, `python-dotenv` for env loading).
+
 ## Data Sources (Phase 1)
 1. **CosIng** — EU Commission cosmetic ingredient database. Public domain. Primary source for INCI → CAS + EINECS + function.
 2. **PubChem REST API** — Free, no key. Fallback CAS verification.
